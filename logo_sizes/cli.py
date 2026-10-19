@@ -241,12 +241,28 @@ def source_plan(args, brand=None):
     return plan
 
 
+def border_is_transparent(image, ring=2):
+    """True when the outer ring of pixels is (nearly all) fully transparent."""
+    alpha = image.getchannel("A")
+    width, height = alpha.size
+    if min(width, height) <= ring * 2:
+        return False
+    # Alpha under 8 counts as clear, the same threshold trimming uses; matting leaves such specks.
+    outer = sum(alpha.histogram()[:8])
+    inner = sum(alpha.crop((ring, ring, width - ring, height - ring)).histogram()[:8])
+    ring_pixels = width * height - (width - 2 * ring) * (height - 2 * ring)
+    return (outer - inner) >= ring_pixels * 0.98
+
+
 def matte(image, settings, role, notes):
     """Apply explicit or measured background removal; return the image and the settings used."""
     if not settings:
         return image, None
     used = dict(settings)
     if str(settings["color"]).lower() == "auto":
+        if border_is_transparent(image):
+            notes.append(f"{role}: background auto found the border already transparent; nothing was removed.")
+            return image, None
         detected = detect_background(image)
         color = detected.color
         used["tolerance"] = settings["tolerance"] or detected.tolerance

@@ -562,3 +562,29 @@ class ReviewFindingCliTests(CliTestCase):
             ico.size = (64, 64)
             box = ico.convert("RGBA").getchannel("A").getbbox()
             self.assertLessEqual(box[2] - box[0], 20)
+
+
+class AutoBackgroundOnTransparentSourceTests(CliTestCase):
+    def test_auto_removal_leaves_an_already_transparent_source_alone_with_a_note(self):
+        result = self.success(*SMALL, "--remove-background", "auto")
+        self.assertIn("already transparent", (result.stdout + result.stderr).lower())
+        self.assertEqual(self.pixel("original"), (10, 20, 30, 128))
+        self.assertEqual(self.pixel("original", (0, 0))[3], 0)
+
+    def test_brand_wide_auto_removal_skips_the_transparent_symbol(self):
+        Image.new("RGB", (60, 60), (250, 246, 238)).save(self.inputs / "primary.png")
+        with Image.open(self.inputs / "primary.png") as im:
+            ImageDraw.Draw(im).ellipse((15, 15, 44, 44), fill=(15, 35, 64))
+            im.save(self.inputs / "primary.png")
+        Image.new("RGBA", (30, 30), (0, 0, 0, 0)).save(self.inputs / "symbol.png")
+        with Image.open(self.inputs / "symbol.png") as im:
+            ImageDraw.Draw(im).rectangle((5, 5, 24, 24), fill=(0, 0, 255, 255))
+            im.save(self.inputs / "symbol.png")
+        brand = self.root / "brand.yaml"
+        brand.write_text("brand: Mixed\nsources: {primary: input/primary.png, symbol: input/symbol.png}\n"
+                         "background: {color: auto}\nsizes: {custom: ['tiny=32x32', 'big=100x100']}\npadding: 0\n")
+        result = self.success("kit", "--brand", str(brand), "--no-icons", "--no-preview", "--no-zip", source=False)
+        self.assertIn("already transparent", result.stdout.lower())
+        with Image.open(self.outputs / "mixed" / "original" / "big.png") as out:
+            self.assertEqual(out.getpixel((1, 1))[3], 0)
+            self.assertEqual(out.getpixel((50, 50)), (15, 35, 64, 255))

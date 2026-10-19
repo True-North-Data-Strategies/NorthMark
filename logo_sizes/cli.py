@@ -11,7 +11,9 @@ from . import __version__
 from .config import ConfigError, load_brand
 from .imaging import (SOURCE_EXTENSIONS, detect_background, load_image, opaque_color, remove_background,
                       trim_to_art)
-from .kit import BuildOptions, SourceArt, generate_kit, publish_kit
+from .dtf import (DtfRequest, UVDTF, build_dtf, garment_colors, load_order, load_placements, pixels_for,
+                  placement_box, placement_names)
+from .kit import BuildOptions, SourceArt, generate_kit, publish, publish_kit
 from .presets import GROUPS, PRESETS, VARIANTS, parse_size, slugify
 from .report import print_file_table
 
@@ -58,10 +60,7 @@ def parser_for_cli():
     parser.add_argument("--formats", nargs="+", choices=("png", "webp"), default=["png"])
     parser.add_argument("--padding", type=float, default=0.08, help="Fraction per side, 0 to below 0.5; default 0.08.")
     parser.add_argument("--no-upscale", action="store_true", help="Keep raster art at or below its source pixel dimensions.")
-    parser.add_argument("--remove-background", metavar="COLOR", help="Explicit background color, such as '#ffffff', or 'auto' to measure the border.")
-    parser.add_argument("--background-mode", choices=("edge", "all"), default="edge")
-    parser.add_argument("--tolerance", type=int, default=0, help="Background matching tolerance, 0 to 255.")
-    parser.add_argument("--feather", type=int, default=0, help="Soft-edge ramp width above the tolerance, 0 to 255; 0 is a hard cut.")
+    add_background_arguments(parser)
     parser.add_argument("--trim", action="store_true", help="Crop to the artwork before fitting.")
     parser.add_argument("--trim-threshold", type=int, default=8, help="Alpha level that counts as artwork when trimming, 0 to 255.")
     parser.add_argument("--icon-background", metavar="COLOR", help="Opaque app icon background; default dark for white variants, white otherwise.")
@@ -76,10 +75,9 @@ def parser_for_cli():
 def select_options(args):
     if not math.isfinite(args.padding) or not 0 <= args.padding < 0.5:
         raise ValueError("Padding must be a finite fraction from 0 to below 0.5.")
-    if not 0 <= args.tolerance <= 255 or not 0 <= args.feather <= 255 or not 0 <= args.trim_threshold <= 255:
-        raise ValueError("Tolerance, feather and trim threshold must be 0 to 255.")
-    if not args.remove_background and (args.tolerance or args.feather or args.background_mode != "edge"):
-        raise ValueError("Background mode, tolerance and feather require --remove-background COLOR.")
+    if not 0 <= args.trim_threshold <= 255:
+        raise ValueError("The trim threshold must be 0 to 255.")
+    background = background_from_args(args)
     presets = list(PRESETS)
     if args.group:
         presets = [p for p in presets if p.group == args.group]
@@ -95,12 +93,6 @@ def select_options(args):
         raise ValueError("Each selected size must have a different name.")
     variants = VARIANTS if "all" in args.variants else tuple(dict.fromkeys(args.variants))
     icon_color = opaque_color(args.icon_background) if args.icon_background else None
-    background = None
-    if args.remove_background:
-        if args.remove_background.lower() != "auto":
-            opaque_color(args.remove_background)
-        background = {"color": args.remove_background, "mode": args.background_mode,
-                      "tolerance": args.tolerance, "feather": args.feather}
     return BuildOptions(tuple(presets), variants, tuple(dict.fromkeys(args.formats)), args.padding,
                         upscale=not args.no_upscale, icons=not args.no_icons, preview=not args.no_preview,
                         archive=not args.no_zip, icon_background=icon_color, background=background,
@@ -184,24 +176,32 @@ def matte(image, settings, role, notes):
     return remove_background(image, color, used["tolerance"], used["mode"], used["feather"]), used
 
 
-def prepare_sources(roles, options, render_size, notes):
-    """Load, matte and trim every source for one brand. Returns role -> SourceArt."""
+def prepare_sources(roles, render_size, notes, background=None, trim=None, enlarges=None):
+    """Load, matte and optionally trim every source for one brand. Returns role -> SourceArt.
+
+    ``enlarges(image)`` may report whether raster exports would be upscaled.
+    """
     prepared = {}
     for role, path in roles.items():
         image, vector, source_notes = load_image(path, render_size)
         notes.extend(f"{role}: {note}" for note in source_notes)
-        image, background = matte(image, options.background, role, notes)
-        if options.trim is not None:
-            image, box = trim_to_art(image, options.trim)
+        image, used = matte(image, background, role, notes)
+        if trim is not None:
+            image, box = trim_to_art(image, trim)
             notes.append(f"{role}: trimmed to {image.width}x{image.height} px (box {box[0]},{box[1]} to {box[2]},{box[3]}).")
         if image.getchannel("A").getextrema()[0] == 255:
             notes.append(f"{role}: the source has a solid background. Converting to PNG does not remove it.")
-        if not vector and options.upscale and any(
-                min(p.width * (1 - 2 * options.padding) / image.width,
-                    p.height * (1 - 2 * options.padding) / image.height) > 1 for p in options.presets):
+        if not vector and enlarges and enlarges(image):
             notes.append(f"{role}: some raster exports were enlarged. More pixels do not restore missing detail.")
-        prepared[role] = SourceArt(role, path, image, vector, background)
+        prepared[role] = SourceArt(role, path, image, vector, used)
     return prepared
+
+
+def kit_enlarges(options):
+    if not options.upscale:
+        return None
+    return lambda image: any(min(p.width * (1 - 2 * options.padding) / image.width,
+                                 p.height * (1 - 2 * options.padding) / image.height) > 1 for p in options.presets)
 
 
 def run_kit(argv):
@@ -227,7 +227,8 @@ def run_kit(argv):
                 try:
                     notes = []
                     render_size = max(512, *(max(p.width, p.height) for p in options.presets))
-                    sources = prepare_sources(roles, options, render_size, notes)
+                    sources = prepare_sources(roles, render_size, notes, options.background, options.trim,
+                                              kit_enlarges(options))
                     with tempfile.TemporaryDirectory(prefix=".logo-build-", dir=args.output_dir) as temporary:
                         kit = generate_kit(sources, slug, Path(temporary), options, notes)
                         backup = publish_kit(kit.folder, kit.archive, args.output_dir, args.overwrite)
@@ -250,6 +251,152 @@ def run_kit(argv):
         return 1
 
 
+DEFAULT_PLACEMENTS = ("left-chest", "full-front", "full-back")
+
+
+def add_background_arguments(parser):
+    parser.add_argument("--remove-background", metavar="COLOR", help="Explicit background color, such as '#ffffff', or 'auto' to measure the border.")
+    parser.add_argument("--background-mode", choices=("edge", "all"), default="edge")
+    parser.add_argument("--tolerance", type=int, default=0, help="Background matching tolerance, 0 to 255.")
+    parser.add_argument("--feather", type=int, default=0, help="Soft-edge ramp width above the tolerance, 0 to 255; 0 is a hard cut.")
+
+
+def background_from_args(args):
+    if not 0 <= args.tolerance <= 255 or not 0 <= args.feather <= 255:
+        raise ValueError("Tolerance and feather must be 0 to 255.")
+    if not args.remove_background:
+        if args.tolerance or args.feather or args.background_mode != "edge":
+            raise ValueError("Background mode, tolerance and feather require --remove-background COLOR.")
+        return None
+    if args.remove_background.lower() != "auto":
+        opaque_color(args.remove_background)
+    return {"color": args.remove_background, "mode": args.background_mode,
+            "tolerance": args.tolerance, "feather": args.feather}
+
+
+def parser_for_dtf():
+    parser = argparse.ArgumentParser(prog="logo-sizes dtf", description="Make 300 DPI DTF transfer files at exact placement sizes, with garment mockups, an order sheet and a press card.")
+    parser.add_argument("source", nargs="?", type=Path, help="One image, or use --brand.")
+    parser.add_argument("--brand", type=Path, metavar="BRAND.yaml", help="Brand configuration with sources, maps and a dtf section.")
+    parser.add_argument("--placement", action="append", default=[], metavar="NAME",
+                        help="Placement from the placements file; repeat for more. Default: the brand's list, or left-chest, full-front and full-back.")
+    parser.add_argument("--audience", help="adult, youth or womens; default adult or the brand's setting.")
+    parser.add_argument("--variants", nargs="+", help="Standard variants or map names from the brand file; default original or the brand's dtf list.")
+    parser.add_argument("--garments", nargs="+", help="Garment colors from the placements file; default the brand's list or all of them.")
+    parser.add_argument("--placements-file", type=Path, help="Alternative placements YAML; default is the packaged vendor file.")
+    parser.add_argument("--order", type=Path, metavar="ORDER.yaml", help="Order file whose quantities fill the order sheet.")
+    parser.add_argument("--allow-low-dpi", action="store_true", help="Write outputs below 150 DPI anyway. The true source DPI is still reported.")
+    parser.add_argument("--no-harden", action="store_true", help="Keep soft alpha instead of thresholding it for DTF.")
+    parser.add_argument("--choke", type=int, default=0, help="Shrink the hardened alpha by this many pixels to remove fringe; default 0.")
+    add_background_arguments(parser)
+    parser.add_argument("--list-placements", action="store_true", help="List placements and sizes from the placements file.")
+    add_common_arguments(parser)
+    return parser
+
+
+def dtf_request(args, data, brand):
+    """Resolve every DTF setting from the brand file and flags before reading artwork."""
+    if brand:
+        settings = brand.dtf
+        design, maps, roles = brand.slug, brand.maps, {role: brand.sources[role] for role in ("primary", "symbol") if role in brand.sources}
+        variants = tuple(args.variants or settings.get("variants") or brand.variants)
+        background, trim = brand.background, brand.trim if brand.trim is not None else 8
+        uv_sizes, uv_variants = brand.uvdtf.get("sizes", []), brand.uvdtf.get("variants")
+    else:
+        if not args.source:
+            raise ValueError("Give a source image or --brand BRAND.yaml.")
+        settings, maps = {}, {}
+        design, roles = slugify(args.source.name), {"primary": args.source.resolve()}
+        variants = tuple(args.variants or ["original"])
+        background, trim = background_from_args(args), 8
+        uv_sizes, uv_variants = [], None
+    for variant in variants:
+        if variant not in VARIANTS and variant not in maps:
+            raise ValueError(f"Unknown variant '{variant}'. Use {', '.join(VARIANTS)} or a map name from the brand file.")
+    audience = args.audience or settings.get("audience") or "adult"
+    placements = list(args.placement or settings.get("placements") or DEFAULT_PLACEMENTS)
+    overrides = settings.get("overrides", {})
+    for placement in placements:
+        placement_box(data, audience, placement, overrides)
+    garments = garment_colors(data, args.garments or settings.get("garments")
+                              or [k for k, v in data.get("garments", {}).items() if isinstance(v, dict)])
+    if not 0 <= args.choke <= 10:
+        raise ValueError("Choke must be 0 to 10 pixels.")
+    quantities = load_order(args.order) if args.order else {}
+    request = DtfRequest(design, audience, placements, variants, garments, maps, overrides,
+                         tuple(settings.get("symbol_for", [])), uv_sizes, tuple(uv_variants) if uv_variants else None,
+                         args.allow_low_dpi, not args.no_harden, args.choke, quantities, trim)
+    return request, roles, background
+
+
+def run_dtf(argv):
+    args = parser_for_dtf().parse_args(argv)
+    try:
+        data = load_placements(args.placements_file)
+        if args.list_placements:
+            for audience in data["audiences"]:
+                for name in placement_names(data, audience):
+                    width, height = placement_box(data, audience, name)
+                    print(f"{audience:8} {name:14} {width:5.2f} x {height:5.2f} in")
+            print(f"Source: {data.get('sources', {}).get('placement_guide', '')} (checked {data.get('checked')})")
+            return 0
+        brand = load_brand(args.brand) if args.brand else None
+        request, roles, background = dtf_request(args, data, brand)
+        root = args.output_dir.resolve()
+        destination = root / request.design / "dtf"
+        for path in roles.values():
+            check_source(path, root, request.design)
+        if destination.is_symlink():
+            raise ValueError("The dtf output is a symbolic link. Choose a different output folder.")
+        if destination.exists() and not args.overwrite:
+            raise ValueError(f"DTF output already exists for {request.design}. Use --overwrite to back it up and replace it.")
+        boxes = [(request.audience, name, placement_box(data, request.audience, name, request.overrides)) for name in request.placements]
+        boxes += [(UVDTF, size["name"], (float(size["width_in"]), float(size["height_in"]))) for size in request.uvdtf_sizes]
+        print(f"{request.design}: {len(boxes)} placement(s) x {len(request.variants)} variant(s); audience {request.audience}; "
+              f"garments {', '.join(request.garments)}")
+        if args.dry_run:
+            for audience, name, (width, height) in boxes:
+                print(f"PLAN: {audience}/{name}: fit inside {width:.2f} x {height:.2f} in -> {destination / audience / name}")
+            print("Dry run only. Artwork was not decoded or validated; nothing was written.")
+            return 0
+        render_size = max(max(pixels_for(width, height)) for _, _, (width, height) in boxes)
+        notes = []
+        refused = 0
+        with output_lock(args.output_dir):
+            sources = prepare_sources(roles, render_size, notes, background)
+            with tempfile.TemporaryDirectory(prefix=".logo-build-", dir=args.output_dir) as temporary:
+                folder, manifest, outputs = build_dtf(sources, request, data, Path(temporary))
+                backup = publish([(folder, destination)], root, f"{request.design}-dtf", args.overwrite)
+        print(f"DONE: {request.design} -> {destination}")
+        if backup:
+            print(f"  Previous dtf output kept at: {backup}")
+        for output in outputs:
+            verdict = output.verdict
+            status = {"ok": "OK", "warn": "WARN", "fail": "FAIL"}[verdict.level]
+            print(f"  {output.audience}/{output.placement} / {output.variant}: Ninja custom size "
+                  f"{output.width_in:.2f} x {output.height_in:.2f} in ({output.width_px}x{output.height_px} px); "
+                  f"source DPI {verdict.dpi} {status}")
+            if not output.file:
+                refused += 1
+                print(f"    NOT WRITTEN: {verdict.dpi} DPI is below {150}. 300 DPI needs {verdict.needed[0]}x{verdict.needed[1]} px. "
+                      "Supply a larger master, or pass --allow-low-dpi.")
+            for warning in output.warnings:
+                print(f"    WARNING: {warning}")
+            for note in output.notes:
+                print(f"    NOTE: {note}")
+        for placement, picks in manifest["recommendations"].items():
+            print(f"  {placement}: " + "; ".join(f"{garment} shirt: use {variant}" for garment, variant in picks.items()))
+        print_file_table(manifest["files"], limit=40)
+        for note in notes:
+            print(f"  NOTE: {note}")
+        print(f"Finished: {len(outputs) - refused} transfer file(s) written, {refused} refused for resolution. "
+              f"Vendor data checked {data.get('checked')}; confirm current specs before ordering.")
+        return 1 if refused else 0
+    except (ValueError, OSError) as exc:
+        print(f"Cannot export: {exc}", file=sys.stderr)
+        return 1
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     command = "kit"
@@ -257,5 +404,7 @@ def main(argv=None):
         command = argv.pop(0)
     if command == "kit":
         return run_kit(argv)
+    if command == "dtf":
+        return run_dtf(argv)
     print(f"The {command} command is not available in this version.", file=sys.stderr)
     return 2

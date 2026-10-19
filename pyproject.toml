@@ -19,6 +19,7 @@ classifiers = [
 
 [project.optional-dependencies]
 svg = ["CairoSVG>=2.8,<3"]
+print = ["reportlab>=4,<6"]
 
 [project.scripts]
 logo-sizes = "logo_sizes.cli:main"
@@ -29,3 +30,6 @@ Issues = "https://github.com/True-North-Data-Strategies/create-logos-all-sizes/i
 
 [tool.setuptools]
 packages = ["logo_sizes"]
+
+[tool.setuptools.package-data]
+logo_sizes = ["data/*.yaml"]

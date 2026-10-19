@@ -246,14 +246,18 @@ def generate_kit(sources, slug, work, options, notes):
     return KitResult(folder, archive, metadata, warnings)
 
 
-def publish_kit(folder, archive, output_root, overwrite=False):
-    slug = folder.name
-    destinations = (output_root / slug, output_root / f"{slug}.zip")
+def publish(items, output_root, label, overwrite=False):
+    """Move built items to their destinations in one step, keeping a backup of anything replaced.
+
+    ``items`` is a list of (built_path, destination) pairs. Either every item lands
+    or nothing changes: a failure part-way restores the previous state.
+    """
+    destinations = [destination for _, destination in items]
     for destination in destinations:
         if destination.is_symlink():
             raise ValueError("An output is a symbolic link. Choose a different output folder.")
         if destination.exists() and not overwrite:
-            raise FileExistsError(f"Output already exists for {slug}. Use --overwrite to keep a backup and replace it.")
+            raise FileExistsError(f"Output already exists for {label}. Use --overwrite to keep a backup and replace it.")
     backup = None
     moved_old, moved_new = [], []
     try:
@@ -262,23 +266,30 @@ def publish_kit(folder, archive, output_root, overwrite=False):
             if backups.is_symlink():
                 raise ValueError("The backup folder must not be a symbolic link.")
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            backup = backups / f"{slug}-{stamp}-{uuid.uuid4().hex[:8]}"
+            backup = backups / f"{label}-{stamp}-{uuid.uuid4().hex[:8]}"
             backup.mkdir(parents=True)
             for path in destinations:
                 if path.exists():
                     saved = backup / path.name
                     path.rename(saved)
                     moved_old.append((saved, path))
-        folder.rename(destinations[0])
-        moved_new.append((destinations[0], folder))
-        if archive:
-            archive.rename(destinations[1])
-            moved_new.append((destinations[1], archive))
+        for built, destination in items:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            built.rename(destination)
+            moved_new.append((destination, built))
     except BaseException:
-        # Preserve the previous complete kit if publishing either part fails.
+        # Preserve the previous complete output if publishing any part fails.
         for destination, original in reversed(moved_new):
             destination.rename(original)
         for saved, original in reversed(moved_old):
             saved.rename(original)
         raise
     return backup
+
+
+def publish_kit(folder, archive, output_root, overwrite=False):
+    slug = folder.name
+    items = [(folder, output_root / slug)]
+    if archive:
+        items.append((archive, output_root / f"{slug}.zip"))
+    return publish(items, output_root, slug, overwrite)

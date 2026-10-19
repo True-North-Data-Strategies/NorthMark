@@ -1,0 +1,14 @@
+# Example order file for `logo-sizes dtf --order` and `logo-sizes gang`.
+# Copy it to local-assets/orders/<date>-<name>.yaml (git ignores that folder).
+# Quantities flow into order-sheet.csv; gang jobs pack these items onto sheets.
+#
+# Each item names a design (the brand slug or source file stem) plus either a
+# placement from the placements file or an explicit size in inches. Items may
+# also point at a finished DTF PNG with `file`.
+
+order: example-order
+items:
+  - {design: example-brand, placement: full-back, variant: original, qty: 2}
+  - {design: example-brand, placement: left-chest, variant: reverse, qty: 2}
+  - {design: example-brand, placement: full-front, variant: original, audience: youth, qty: 1}
+  - {design: example-brand, width_in: 4, height_in: 6, variant: original, qty: 1}

@@ -1,0 +1,120 @@
+# Ninja Transfers DTF data used by `logo-sizes dtf` and `logo-sizes gang`.
+#
+# Every number here is vendor or industry data copied on the date shown. It is
+# configuration, not a promise: specs change, so confirm on the product page at
+# order time. Where two Ninja pages disagree, both values are recorded and the
+# safer one is used.
+
+vendor: Ninja Transfers
+sources:
+  placement_guide: "https://ninjatransfers.com/pages/dtf-transfer-placement-guide"
+  faq: "https://ninjatransfers.com/a/faq"
+checked: 2026-10-18
+dpi: 300
+units: in
+
+files:
+  accepted_types: [PSD, PNG, PDF, AI, JPG, SVG]
+  preferred_type: SVG
+  raster_dpi: 300
+  mirror: false                      # Ninja prints in the right orientation; never mirror the art
+  proofs: "No proofs or mockups are provided on DTF orders; this tool's mockup is the only proof."
+  color_matching: "Hex color matching is available through the Notes to Designers box."
+  max_upload_mb: 50
+  max_upload_note: "The upload widget states 50 MB; the by-size how-to says files up to 5 GB. Conflicting; 50 MB is treated as the ceiling and larger files get a warning."
+
+audiences:
+  adult:
+    source: placement_guide
+    left-chest:
+      range: {width: [2.5, 4.5], height: [2.5, 4.5]}
+      average: {width: 3.5, height: 2.0}
+      position: "About 3 in below the bottom of the collar, 4 to 6 in from the centerline"
+      note: "Ninja's average height (2 in) is below its own range floor (2.5 in). The range is a warning band, not a hard stop."
+    center-chest:
+      range: {width: [6, 10], height: [2, 10]}
+      average: {width: 8, height: 4}
+      position: "3 in below the bottom of the collar, centered"
+    full-front:
+      range: {width: [10, 12], height: [10, 14]}
+      average: {width: 11, height: 11}
+      position: "3 in below the bottom of the collar"
+      note: "FAQ: adult S to 2XL full front 11 x 11 in or larger; 3XL to 5XL 12 x 14 in or larger."
+    sleeve:
+      range: {width: [1, 3.5], height: [1, 3.5]}
+      average: {width: 2.5, height: 1}
+      position: "About 1 in above the seam edge, centered"
+    back-collar:
+      range: {width: [1, 3], height: [1, 3]}
+      average: {width: 2, height: 2}
+      position: "1 to 2 in below the back collar, centered"
+    upper-back:
+      range: {width: [10, 14], height: [2, 6]}
+      average: {width: 12, height: 4}
+      position: "About 4 in below the collar, centered"
+    full-back:
+      range: {width: [11, 13], height: [13, 15]}
+      average: {width: 12, height: 14}
+      position: "About 4 in below the bottom of the collar, centered"
+      note: "FAQ gives a wider full-back span of 9 x 11 in up to 12 x 17 in."
+    oversize:
+      range: {width: [12, 15], height: [14, 16]}
+      average: {width: 13, height: 15}
+      position: "About 2 in below the bottom of the collar"
+  youth:
+    source: placement_guide
+    note: "Youth sizes are the bracketed values in the placement guide; positions follow the adult guidance."
+    left-chest: {average: {width: 2.5, height: 1.5}, position: "About 3 in below the bottom of the collar, 4 to 6 in from the centerline"}
+    center-chest: {average: {width: 6, height: 3}, position: "3 in below the bottom of the collar, centered"}
+    full-front:
+      average: {width: 9, height: 9}
+      position: "3 in below the bottom of the collar"
+      note: "The FAQ gives youth full front as 8 x 8 in; the placement guide gives 9 x 9 in. The guide value is used."
+    sleeve: {average: {width: 1.5, height: 1}, position: "About 1 in above the seam edge, centered"}
+    back-collar: {average: {width: 1.5, height: 1.5}, position: "1 to 2 in below the back collar, centered"}
+    upper-back: {average: {width: 10, height: 2.5}, position: "About 4 in below the collar, centered"}
+    full-back: {average: {width: 10, height: 12}, position: "About 4 in below the bottom of the collar, centered"}
+    oversize: {average: {width: 10, height: 12}, position: "About 2 in below the bottom of the collar"}
+  womens:
+    source: faq
+    note: "Ninja publishes only a women's full-front size. Other women's placements are not listed, so they are left out."
+    full-front: {average: {width: 9, height: 9}, position: "3 in below the bottom of the collar"}
+
+garments:
+  note: "Swatch colors are approximate preview values chosen for this tool, not vendor color specifications."
+  white: {color: "#ffffff", garment: "Bella + Canvas 3001C White"}
+  navy: {color: "#1f2a44", garment: "Bella + Canvas 3001C Navy"}
+  black: {color: "#111111", garment: "Bella + Canvas 3001C Black"}
+
+press:
+  caveat: "Ninja guidance as of 2026-10-18; check the current instructions before pressing."
+  settings:
+    - {source: faq, temperature_f: 310, pressure: "medium to high", seconds: 13, peel: "hot or cool", finish: "Final press of about 15 seconds under parchment"}
+    - {source: faq, temperature_f: "300 to 320", seconds: "12 to 15", note: "A second FAQ answer gives this range."}
+
+bulk_discounts:                    # by-size orders, whole-order quantity
+  source: faq
+  tiers:
+    - {min_qty: 1, max_qty: 14, percent: 0}
+    - {min_qty: 15, max_qty: 49, percent: 20}
+    - {min_qty: 50, max_qty: 99, percent: 30}
+    - {min_qty: 100, max_qty: 249, percent: 40}
+    - {min_qty: 250, max_qty: null, percent: 50}
+
+gang_sheets:
+  width_in: 22
+  lengths_ft: [2, 5, 10, 15, 20]
+  lengths_note: "The FAQ lists 2, 5, 10, 15 and 20 ft. Trade press reported 40 ft sheets in July 2026 and a reseller lists 7 ft; confirm on the product page before relying on either."
+  upload_types: [PNG, SVG, PDF, EPS]
+  preferred_type: SVG
+  upload_note: "One FAQ answer says only ready-to-print vectorized gang sheets are accepted. Conflicting; this tool writes PNG and PDF. Confirm with Ninja before the first upload."
+  pricing_note: "Price depends only on sheet size, not on how many designs are on it."
+  gap_in: 0.25                     # not a Ninja figure; tool default, confirm with Ninja
+  margin_in: 0.25                  # not a Ninja figure; tool default, confirm with Ninja
+  spacing_note: "No Ninja figure was found for spacing between designs. 0.25 in gap and margin are this tool's defaults."
+
+industry:                          # not from Ninja; general DTF guidance
+  source: "https://t-shirt.ca/dtf-knowledge-hub/dtf-artwork-requirements-and-file-formats/"
+  min_line_mm: 0.5
+  min_line_note: "Industry guidance: strokes under about 0.5 mm (about 6 px at 300 DPI) may not print."
+  semi_transparency_note: "Industry guidance: avoid semi-transparent areas. DTF prints a white underbase and soft alpha prints badly."

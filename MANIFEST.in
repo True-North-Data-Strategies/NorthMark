@@ -1,0 +1,6 @@
+include make_logo_sizes.py requirements.txt README.md LICENSE
+recursive-include examples *.py
+recursive-include tests *.py
+recursive-include tools *.py
+recursive-exclude local-assets *
+global-exclude .DS_Store *.py[cod]

@@ -1,0 +1,34 @@
+# Private artwork, product files, exports and archived originals.
+/local-assets/
+# Protect older folder names and common custom output locations, too.
+/logo-input/
+/logo-exports/
+/exports/
+/output/
+/dist/
+/build/
+*.egg-info/
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+# Generated asset/archive formats are private by default.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.ico
+*.pdf
+*.zip
+*.ai
+*.eps
+*.psd
+*.svg

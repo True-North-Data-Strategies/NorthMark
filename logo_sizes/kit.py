@@ -1,0 +1,221 @@
+"""Build complete kits in temporary storage, then publish with backups."""
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import hashlib
+import html
+import json
+import math
+from pathlib import Path
+import shutil
+import uuid
+import zipfile
+
+from PIL import Image, ImageDraw, ImageFont
+
+from . import __version__
+from .imaging import fit_canvas, make_variant
+
+
+@dataclass
+class BuildOptions:
+    presets: tuple
+    variants: tuple = ("original",)
+    formats: tuple = ("png",)
+    padding: float = 0.08
+    upscale: bool = True
+    icons: bool = True
+    preview: bool = True
+    archive: bool = True
+    icon_background: tuple | None = None
+    background_removal: str | None = None
+    background_mode: str = "edge"
+    tolerance: int = 0
+
+
+def _write_json(path, value):
+    path.write_text(json.dumps(value, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+
+def write_icons(image, folder, padding, upscale, background):
+    folder.mkdir()
+    sizes = (16, 32, 48, 64, 128, 256)
+    icons = [fit_canvas(image, (size, size), padding, upscale) for size in sizes]
+    icons[-1].save(folder / "favicon.ico", format="ICO", sizes=[(s, s) for s in sizes],
+                   append_images=icons[:-1])
+    manifest_icons = []
+    for size in (192, 512):
+        name = f"icon-{size}.png"
+        fit_canvas(image, (size, size), padding, upscale).save(folder / name, optimize=True)
+        manifest_icons.append({"src": name, "sizes": f"{size}x{size}", "type": "image/png", "purpose": "any"})
+        name = f"icon-maskable-{size}.png"
+        # Keep the entire rectangular artwork inside the guaranteed 80% circle.
+        safe_padding = max(padding, 0.5 - 0.4 / math.sqrt(2))
+        fit_canvas(image, (size, size), safe_padding, upscale, background).save(folder / name, optimize=True)
+        manifest_icons.append({"src": name, "sizes": f"{size}x{size}", "type": "image/png", "purpose": "maskable"})
+    fit_canvas(image, (180, 180), padding, upscale, background).save(folder / "apple-touch-icon.png", optimize=True)
+    _write_json(folder / "manifest.webmanifest", {"icons": manifest_icons})
+
+
+def write_preview(images, folder, exports):
+    cell_width, row_height = 360, 300
+    preview = Image.new("RGB", (cell_width * 3, 52 + row_height * len(images)), "#eeeeee")
+    draw = ImageDraw.Draw(preview)
+    font = ImageFont.load_default(size=17)
+    draw.text((20, 16), "Logo variants and small-size checks", font=font, fill="black")
+    for row, (name, image) in enumerate(images.items()):
+        y = 52 + row * row_height
+        for column, label in enumerate(("White", "Dark", "Transparency")):
+            x = column * cell_width
+            draw.text((x + 16, y + 8), f"{name.title()} / {label}", fill="black", font=font)
+            background = Image.new("RGBA", (328, 244), "#ffffff" if column != 1 else "#202020")
+            if column == 2:
+                checker = ImageDraw.Draw(background)
+                for top in range(0, 244, 16):
+                    for left in range(0, 328, 16):
+                        if (left // 16 + top // 16) % 2:
+                            checker.rectangle((left, top, left + 15, top + 15), fill="#cccccc")
+            large = fit_canvas(image, (328, 190), 0.08)
+            background.alpha_composite(large, (0, 0))
+            for index, size in enumerate((16, 32, 48)):
+                tiny = fit_canvas(image, (size, size), 0.08)
+                background.alpha_composite(tiny, (76 + index * 64, 194 + (48 - size) // 2))
+            preview.paste(background.convert("RGB"), (x + 16, y + 36))
+    preview.save(folder / "preview.png", optimize=True)
+    links = "\n".join(f'<li><a href="{html.escape(path, quote=True)}">{html.escape(path)}</a></li>' for path in exports)
+    page = f'''<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logo kit preview</title>
+<style>body{{font:17px system-ui,sans-serif;margin:2rem auto;padding:0 1rem;max-width:1100px;background:#f3f3f3;color:#222}}img{{max-width:100%;height:auto}}a{{color:#164b8b}}li{{margin:.4rem 0}}</style>
+<h1>Logo kit preview</h1><p>Inspect the white, dark and checkerboard backgrounds. Small samples below each logo are 16, 32 and 48 pixels.</p>
+<img src="preview.png" alt="Logo variants on white, dark and checkerboard backgrounds, with small icon samples">
+<p><a href="GUIDE.txt">Which file to use</a></p><h2>Exports</h2><ul>{links}</ul></html>
+'''
+    (folder / "preview.html").write_text(page, encoding="utf-8")
+
+
+def generate_kit(source, image, vector, slug, work, options, notes):
+    folder = work / slug
+    folder.mkdir()
+    masters = folder / "masters"
+    masters.mkdir()
+    shutil.copy2(source, masters / ("source" + source.suffix.lower()))
+    images = {variant: make_variant(image, variant) for variant in options.variants}
+    exports = []
+    for name, variant_image in images.items():
+        variant_dir = folder / name
+        variant_dir.mkdir()
+        for preset in options.presets:
+            fitted = fit_canvas(variant_image, (preset.width, preset.height), options.padding,
+                                options.upscale or vector)
+            for format_name in options.formats:
+                path = variant_dir / f"{preset.name}.{format_name}"
+                if format_name == "webp":
+                    fitted.save(path, format="WEBP", lossless=True, exact=True)
+                else:
+                    fitted.save(path, format="PNG", optimize=True)
+                exports.append(path.relative_to(folder).as_posix())
+        if options.icons:
+            background = options.icon_background or ((32, 32, 32, 255) if name == "white" else (255, 255, 255, 255))
+            write_icons(variant_image, variant_dir / "app-icons", options.padding,
+                        options.upscale or vector, background)
+            exports.extend(p.relative_to(folder).as_posix() for p in sorted((variant_dir / "app-icons").iterdir()))
+    if options.preview:
+        write_preview(images, folder, exports)
+    guide = '''LOGO KIT - WHICH FILE TO USE
+
+original/: Original colors, with existing transparency preserved.
+white/: White artwork for dark surfaces, if requested.
+black/: Black artwork for light surfaces, if requested.
+grayscale/: Neutral shades, if requested.
+inverted/: A color negative. This changes every brand color, if requested.
+
+PNG preserves transparency. WebP exports, if requested, are lossless.
+app-icons/favicon.ico contains six browser icon sizes.
+app-icons/apple-touch-icon.png has an opaque background.
+app-icons/manifest.webmanifest is an ICON FRAGMENT. Merge its icons into
+your application's manifest and adjust the paths for your website.
+Maskable icons have extra safe padding and an opaque background.
+White variants use a dark icon background by default; others use white.
+The --icon-background option overrides that choice for all variants.
+
+Use preview.html or preview.png to inspect dark/light contrast and tiny
+icon legibility. A detailed wordmark often needs separate symbol-only art.
+Horizontal, stacked and symbol versions require their own source designs.
+
+masters/source.* is the untouched original, including any source metadata.
+A supplied vector SVG remains vector. Raster sources are NOT vectorized.
+master-2048.png is a sized derivative and may have been enlarged.
+Pixel dimensions alone do not specify print size, resolution or CMYK color.
+Ask your printer for the required vector artwork and print specifications.
+
+Background removal only runs when explicitly requested. Edge mode keeps
+enclosed details; all mode removes all matching colors, including details.
+Check soft edges and textured backgrounds carefully before using a result.
+
+Exports use RGB color. Source EXIF is not copied into generated images.
+Platform requirements change; preset names are convenient starting sizes.
+Check current requirements before uploading. Artwork rights remain with
+their respective owners; the software license grants no artwork rights.
+'''
+    (folder / "GUIDE.txt").write_text(guide, encoding="utf-8")
+    metadata = {
+        "generator_version": __version__, "brand": slug, "source_name": source.name,
+        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "vector_source": vector,
+        "variants": list(options.variants), "formats": list(options.formats), "padding": options.padding,
+        "upscale_raster": options.upscale, "background_removal": options.background_removal,
+        "background_mode": options.background_mode, "tolerance": options.tolerance,
+        "notes": notes, "files": [],
+    }
+    for path in sorted(folder.rglob("*")):
+        if path.is_file():
+            metadata["files"].append({"path": path.relative_to(folder).as_posix(),
+                                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                                      "bytes": path.stat().st_size})
+    _write_json(folder / "kit.json", metadata)
+    archive = None
+    if options.archive:
+        archive = work / f"{slug}.zip"
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+            for path in sorted(folder.rglob("*")):
+                if path.is_file():
+                    bundle.write(path, path.relative_to(work).as_posix())
+    return folder, archive
+
+
+def publish_kit(folder, archive, output_root, overwrite=False):
+    slug = folder.name
+    destinations = (output_root / slug, output_root / f"{slug}.zip")
+    for destination in destinations:
+        if destination.is_symlink():
+            raise ValueError("An output is a symbolic link. Choose a different output folder.")
+        if destination.exists() and not overwrite:
+            raise FileExistsError(f"Output already exists for {slug}. Use --overwrite to keep a backup and replace it.")
+    backup = None
+    moved_old, moved_new = [], []
+    try:
+        if any(path.exists() for path in destinations):
+            backups = output_root / ".backups"
+            if backups.is_symlink():
+                raise ValueError("The backup folder must not be a symbolic link.")
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup = backups / f"{slug}-{stamp}-{uuid.uuid4().hex[:8]}"
+            backup.mkdir(parents=True)
+            for path in destinations:
+                if path.exists():
+                    saved = backup / path.name
+                    path.rename(saved)
+                    moved_old.append((saved, path))
+        folder.rename(destinations[0])
+        moved_new.append((destinations[0], folder))
+        if archive:
+            archive.rename(destinations[1])
+            moved_new.append((destinations[1], archive))
+    except BaseException:
+        # Preserve the previous complete kit if publishing either part fails.
+        for destination, original in reversed(moved_new):
+            destination.rename(original)
+        for saved, original in reversed(moved_old):
+            saved.rename(original)
+        raise
+    return backup

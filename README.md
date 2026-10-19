@@ -10,20 +10,36 @@
 </div>
 <!-- TNDS-HEADER:END -->
 
-## Table of Contents
+<p align="center"><a href="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml/badge.svg" alt="Tests and public-file check status" /></a></p>
 
-[What This Is](#what-this-is) | [Quick start](#quick-start) |
-[Keep your artwork private](#keep-your-artwork-private) | [Color versions](#color-versions) |
-[Background removal](#explicit-background-removal) | [Layouts](#horizontal-stacked-and-symbol-artwork) |
-[SVG originals](#svg-originals) | [Kit contents](#what-is-in-a-kit) |
-[Standard sizes](#standard-export-sizes) | [Safe reruns](#safe-reruns-and-other-folders) |
-[Development](#development-and-installation) | [Stack](#stack) | [License](#license) | [Contact](#contact)
+## Contents
 
-## What This Is
+[What this is](#what-this-is) | [Quick start](#quick-start) | [Keep your artwork private](#keep-your-artwork-private) |
+[Color versions](#color-versions) | [What is in a kit](#what-is-in-a-kit) |
+[Standard sizes](#standard-export-sizes) | [Development](#development-and-installation)
+
+## What this is
 
 Turn source artwork into correctly proportioned PNGs, optional lossless WebP files,
 color variants, browser/app icons, previews and a ZIP you can hand to someone else.
 Runs locally. No account, upload service or AI is required.
+
+It removes the usual problems:
+
+- Hand-exporting the same logo at fifteen sizes for every new brand.
+- Round logos coming out as ovals or clipped, because a source was stretched or
+  cropped to fit a square.
+- A white box behind a logo that was supposed to be transparent.
+- A rerun quietly overwriting the last good set of files.
+
+<p align="center">
+  <img src="docs/images/demo-preview.png" alt="Grid of logo color versions on white, dark and checkerboard backgrounds, with 16, 32 and 48 pixel samples under each" width="720" />
+</p>
+
+*The kit preview for the generated demo mark. Each color version sits on white, dark
+and transparent backgrounds, with 16, 32 and 48 pixel samples underneath. The empty
+white-on-white and black-on-dark cells are the point: they show which version not to
+use where.*
 
 ## Quick start
 
@@ -67,6 +83,7 @@ create-logos-all-sizes/
   logo_sizes/             public program code
   tests/                  tests generate their own temporary artwork
   examples/               generic example generator
+  docs/images/            generated demo art for this README, the only tracked images
   local-assets/           IGNORED BY GIT: keep all your own material here
     input/                original artwork
     exports/              generated kits, previews and ZIPs
@@ -80,6 +97,9 @@ The entire `local-assets/` folder is ignored, including product and client files
 Common artwork and archive extensions are also ignored outside that folder to
 reduce accidental additions. Git ignore is not encryption or access control, and
 `git add -f` can bypass it. Never force-add your artwork to a public repository.
+
+The one exception is `docs/images/`, which holds generated demo images for this
+README. The public-file check allows PNG files up to 500 KB in that folder only.
 
 Before publishing changes, run:
 
@@ -264,6 +284,14 @@ package installation uses `local-assets` in the current working directory.
 Tests create temporary generic images and exercise real exports, pixels,
 transparency, background removal, duplicate protection, backups, icons, ZIPs and
 SVG refusal rules. CI runs the suite with SVG support on Python 3.10, 3.12 and 3.14.
+
+To regenerate the README image after changing the preview:
+
+```sh
+python examples/make_demo.py        # skip if local-assets/input/demo-mark.png exists
+python make_logo_sizes.py local-assets/input/demo-mark.png --variants all --overwrite
+cp local-assets/exports/demo-mark/preview.png docs/images/demo-preview.png
+```
 
 ## License
 

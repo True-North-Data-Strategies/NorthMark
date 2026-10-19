@@ -55,6 +55,30 @@ class PublicFileChecks(unittest.TestCase):
                 self.assertNotEqual(self.check().returncode, 0)
                 self.git("rm", "--cached", name)
 
+    def test_readme_demo_image_is_allowed_in_docs_images(self):
+        folder = self.root / "docs" / "images"
+        folder.mkdir(parents=True)
+        (folder / "demo.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+        self.git("add", "docs/images/demo.png")
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_artwork_outside_docs_images_is_refused(self):
+        for name in ("docs/other.png", "docs/images/nested/demo.png", "docs/images/demo.jpg"):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"\x89PNG\r\n\x1a\n")
+                self.git("add", name)
+                self.assertNotEqual(self.check().returncode, 0)
+                self.git("rm", "--cached", "-q", name)
+
+    def test_oversized_readme_demo_image_is_refused(self):
+        folder = self.root / "docs" / "images"
+        folder.mkdir(parents=True)
+        (folder / "big.png").write_bytes(b"\x00" * 500_001)
+        self.git("add", "docs/images/big.png")
+        self.assertNotEqual(self.check().returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

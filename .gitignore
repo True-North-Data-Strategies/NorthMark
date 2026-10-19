@@ -32,3 +32,5 @@ __pycache__/
 *.eps
 *.psd
 *.svg
+# Generated demo images for the README are the only tracked images.
+!/docs/images/*.png

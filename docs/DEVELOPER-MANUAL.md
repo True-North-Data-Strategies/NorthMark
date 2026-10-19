@@ -81,7 +81,9 @@ Every command builds into a temporary folder inside the output directory
 (`tempfile.TemporaryDirectory(prefix=".logo-build-")`) and then calls `kit.publish()`,
 which moves each built item to its destination with `rename`. Existing destinations
 are moved to `.backups/<label>-<UTC stamp>-<id>/` first, including outputs that have no
-replacement this run (a kit's old ZIP when `--no-zip` is used). If any move fails, the
+replacement this run (a kit's old ZIP when `--no-zip` is used). Subfolders named in
+`carry_over` (a kit's `dtf/`, which the `dtf` command owns) move from the replaced
+output into the new one instead of the backup. If any move fails, the
 moves already made are reversed and the backups restored, so the previous complete
 output always survives. Symbolic links at any destination are refused.
 

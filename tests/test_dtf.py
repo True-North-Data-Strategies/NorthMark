@@ -38,6 +38,14 @@ class PlacementDataTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             placement_box(data, "womens", "sleeve")
 
+    def test_gang_sheet_defaults_rest_on_dated_sources(self):
+        gang = load_placements()["gang_sheets"]
+        self.assertEqual((gang["width_in"], gang["gap_in"], gang["margin_in"]), (22, 0.25, 0.5))
+        self.assertEqual(gang["spacing_checked"].isoformat(), "2026-10-19")
+        self.assertTrue(gang["spacing_sources"])
+        self.assertIn("builder", gang["upload_workflow"])
+        self.assertIn("vector", gang["upload_rule"].lower())
+
     def test_template_headers_match_the_order_sheet(self):
         from logo_sizes.dtf import ORDER_SHEET_COLUMNS
         header = (ROOT / "examples" / "templates" / "order-sheet.csv").read_text().strip().split(",")

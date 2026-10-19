@@ -338,6 +338,8 @@ def run_kit(argv):
                     print(f"DONE: {slug} -> {args.output_dir / slug}")
                     if backup:
                         print(f"  Previous kit kept at: {backup}")
+                        if (args.output_dir / slug / "dtf").is_dir():
+                            print("  Existing dtf/ kept with the new kit; it has its own backups.")
                     print_file_table(kit.manifest["files"])
                     for warning in kit.warnings:
                         print(f"  WARNING: {warning}")
@@ -575,11 +577,10 @@ def run_gang(argv):
         if "cost_compare" in layout:
             print(f"  COST: {layout['cost_compare']['summary']}")
         gang = data.get("gang_sheets", {})
-        for key in ("upload_note", "spacing_note", "lengths_note"):
+        for key in ("upload_rule", "upload_workflow", "spacing_note", "lengths_note"):
             if gang.get(key):
                 print(f"  NOTE: {gang[key]}")
-        print(f"Finished: {len(sheets)} sheet(s). Vendor data checked {data.get('checked')}; confirm the gang-sheet "
-              "format and spacing with the vendor before the first upload.")
+        print(f"Finished: {len(sheets)} sheet(s). Vendor data checked {data.get('checked')}; confirm current specs before ordering.")
         return 0
     except (ValueError, OSError) as exc:
         print(f"Cannot export: {exc}", file=sys.stderr)

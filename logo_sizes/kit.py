@@ -390,13 +390,15 @@ def generate_kit(sources, slug, work, options, notes):
     return KitResult(folder, archive, metadata, warnings)
 
 
-def publish(items, output_root, label, overwrite=False, retire=()):
+def publish(items, output_root, label, overwrite=False, retire=(), carry_over=()):
     """Move built items to their destinations in one step, keeping a backup of anything replaced.
 
     ``items`` is a list of (built_path, destination) pairs. ``retire`` lists outputs of a
     previous run that have no replacement this time; they move to the backup too, so a
-    stale file never sits beside a fresh one. Either every item lands or nothing changes:
-    a failure part-way restores the previous state.
+    stale file never sits beside a fresh one. ``carry_over`` names subfolders of a
+    replaced destination that belong to another command (a kit's ``dtf/``); they move
+    into the new output instead of the backup. Either every item lands or nothing
+    changes: a failure part-way restores the previous state.
     """
     destinations = [destination for _, destination in items] + list(retire)
     for destination in destinations:
@@ -420,6 +422,12 @@ def publish(items, output_root, label, overwrite=False, retire=()):
                     path.rename(saved)
                     moved_old.append((saved, path))
         for built, destination in items:
+            for name in carry_over:
+                previous = backup / destination.name / name if backup else None
+                if previous is not None and previous.is_dir() and not (built / name).exists():
+                    previous.rename(built / name)
+                    moved_new.append((built / name, previous))
+        for built, destination in items:
             destination.parent.mkdir(parents=True, exist_ok=True)
             built.rename(destination)
             moved_new.append((destination, built))
@@ -441,4 +449,4 @@ def publish_kit(folder, archive, output_root, overwrite=False):
         items.append((archive, output_root / f"{slug}.zip"))
     else:
         retire.append(output_root / f"{slug}.zip")
-    return publish(items, output_root, slug, overwrite, retire)
+    return publish(items, output_root, slug, overwrite, retire, carry_over=("dtf",))

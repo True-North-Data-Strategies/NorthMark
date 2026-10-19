@@ -185,6 +185,7 @@ class GangCliTests(unittest.TestCase):
         self.assertEqual(set(rows[0]), set(CUT_LIST_COLUMNS))
         self.assertTrue((folder / "preview.png").is_file())
         self.assertIn("utilization", result.stdout.lower())
+        self.assertIn("gang sheet builder", result.stdout.lower())
         if HAS_REPORTLAB:
             self.assertTrue((folder / "sheet-4x6.pdf").is_file())
         else:

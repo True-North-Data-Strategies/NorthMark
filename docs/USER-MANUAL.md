@@ -181,7 +181,8 @@ python make_logo_sizes.py dtf --list-placements
 | `-o`, `--overwrite`, `--dry-run` | As for kits | |
 
 The output lands in `<output>/<design>/dtf/` and is published as one unit: an
-existing `dtf/` folder needs `--overwrite`, which backs it up first. The art is always
+existing `dtf/` folder needs `--overwrite`, which backs it up first. Rebuilding the kit
+with `kit --overwrite` keeps the design's existing `dtf/` folder in place. The art is always
 trimmed to its bounding box per variant, so the stated size is the visible art.
 
 ### The resolution verdict
@@ -245,6 +246,19 @@ policies are tried and the shortest result is kept, so the same job always gives
 same layout. The shortest configured length that holds the layout is chosen; when even
 the longest will not, the layout is split across sheets.
 
+Defaults rest on published guidance, recorded with sources and dates in the vendor data
+file: a 0.25 inch gap between transfers (the lowest published industry minimum; widen it
+for contour cuts, scissors or large graphics) and a 0.5 inch edge margin (this tool's
+conservative default; the lowest published minimum is 0.25 inch).
+
+### Uploading to Ninja Transfers
+
+Ninja accepts an uploaded gang sheet only when it is fully vector, and prefers SVG. The
+sheet PNG and PDF written here are raster. For Ninja, upload the 300 DPI transparent PNGs
+from each design's `dtf/` folder into the online gang sheet builder and reproduce the
+positions in `layout.json`, or use Auto Build. Keep `cut-list.csv` and `preview.png` as
+the cut plan. Printers that accept raster gang sheets can take the PNG or PDF directly.
+
 ## Gang job files
 
 YAML:
@@ -301,3 +315,4 @@ Where two vendor statements conflict, both are recorded and the safer one is use
 | `Unsupported SVG element` or `SVG external resources` | Export a plain SVG with inline attributes; style blocks may only hold plain rules |
 | `Tracked configuration mentions a private term` | A tracked YAML or CSV contains a term from `local-assets/private-terms.txt`; move the data to `local-assets/` |
 | `PDF sheets skipped` | Install the print extra: `pip install ".[print]"` |
+| Ninja rejects the uploaded sheet | Ninja takes only vector gang sheets; upload the transfer PNGs into its gang sheet builder instead |

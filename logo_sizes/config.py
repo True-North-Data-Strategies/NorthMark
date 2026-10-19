@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import ImageColor
 import yaml
 
-from .presets import GROUPS, PRESETS, VARIANTS, parse_size, slugify
+from .presets import GROUPS, PRESETS, STANDARD_PRESETS, VARIANTS, parse_size, preset_named, slugify
 
 
 class ConfigError(ValueError):
@@ -15,7 +15,7 @@ class ConfigError(ValueError):
 
 
 TOP_LEVEL_KEYS = {"brand", "slug", "sources", "colors", "background", "trim", "padding", "variants",
-                  "maps", "sizes", "formats", "icon_background", "web", "dtf", "uvdtf"}
+                  "maps", "sizes", "formats", "icon_background", "banner_background", "web", "dtf", "uvdtf"}
 SOURCE_ROLES = ("primary", "symbol", "horizontal")
 BACKGROUND_KEYS = {"color", "mode", "tolerance", "feather"}
 WEB_KEYS = {"name", "short_name", "theme_color", "background_color"}
@@ -35,9 +35,10 @@ class BrandConfig:
     padding: float = 0.08
     variants: tuple = ("original",)
     maps: dict = field(default_factory=dict)
-    presets: tuple = PRESETS
+    presets: tuple = STANDARD_PRESETS
     formats: tuple = ("png",)
     icon_background: tuple | None = None
+    banner_background: tuple | None = None
     web: dict = field(default_factory=dict)
     dtf: dict = field(default_factory=dict)
     uvdtf: dict = field(default_factory=dict)
@@ -98,7 +99,7 @@ def _string_list(value, where):
 
 def _sizes(section):
     if section is None:
-        return PRESETS
+        return STANDARD_PRESETS
     _check_keys(section, {"groups", "presets", "custom"}, "sizes")
     chosen = []
     groups = _string_list(section.get("groups", []), "sizes.groups")
@@ -106,9 +107,10 @@ def _sizes(section):
         _expect(group in GROUPS, f"Unknown size group: {group}. Choose from {', '.join(GROUPS)}.")
     chosen.extend(p for p in PRESETS if p.group in groups)
     for name in _string_list(section.get("presets", []), "sizes.presets"):
-        matches = [p for p in PRESETS if p.name == name]
-        _expect(matches, f"Unknown preset: {name}.")
-        chosen.extend(matches)
+        try:
+            chosen.append(preset_named(name))
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
     for custom in _string_list(section.get("custom", []), "sizes.custom"):
         try:
             chosen.append(parse_size(custom))
@@ -238,6 +240,8 @@ def load_brand(path):
     _expect(formats and set(formats) <= {"png", "webp"}, "formats may only contain png and webp.")
     icon_background = resolve_color(data.get("icon_background"), colors)
     _expect("icon_background" not in data or icon_background is not None, "icon_background must be an opaque color.")
+    banner_background = resolve_color(data.get("banner_background"), colors)
+    _expect("banner_background" not in data or banner_background is not None, "banner_background must be an opaque color.")
     web = data.get("web", {}) or {}
     _check_keys(web, WEB_KEYS, "web")
     for key, value in web.items():
@@ -246,4 +250,4 @@ def load_brand(path):
             resolve_color(value, colors)
     return BrandConfig(path, name.strip(), slug, sources, colors, _background(data.get("background"), colors),
                        _trim(data.get("trim")), float(padding), variants, maps, _sizes(data.get("sizes")),
-                       formats, icon_background, web, _dtf(data.get("dtf")), _uvdtf(data.get("uvdtf")))
+                       formats, icon_background, banner_background, web, _dtf(data.get("dtf")), _uvdtf(data.get("uvdtf")))

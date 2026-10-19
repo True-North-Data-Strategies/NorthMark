@@ -24,11 +24,20 @@ def opaque_color(value):
     return color
 
 
-def _svg_image(path, render_size):
+STYLE_FORBIDDEN = ("@", "url(", "/*", "*/", "\\", "<", "&", "expression(", "javascript", "-moz-binding", "behavior")
+
+
+def _check_style_text(text):
+    lowered = (text or "").lower()
+    if any(token in lowered for token in STYLE_FORBIDDEN):
+        raise ValueError("SVG style blocks may only contain plain fill, stroke and font rules; imports, url() and comments are not supported.")
+
+
+def _validated_svg(path):
+    """Return the SVG bytes and its width and height after the safety checks."""
     try:
-        import cairosvg
         from defusedxml import ElementTree
-    except (ImportError, OSError) as exc:
+    except ImportError as exc:
         raise ValueError('SVG support needs CairoSVG and Cairo. Install with: pip install ".[svg]". See README for system setup.') from exc
     data = path.read_bytes()
     if len(data) > 5_000_000:
@@ -40,12 +49,15 @@ def _svg_image(path, render_size):
     root = ElementTree.fromstring(data, forbid_dtd=True, forbid_entities=True, forbid_external=True)
     allowed = {"svg", "g", "defs", "path", "rect", "circle", "ellipse", "line", "polyline",
                "polygon", "use", "symbol", "clipPath", "mask", "linearGradient",
-               "radialGradient", "stop", "title", "desc", "text", "tspan"}
+               "radialGradient", "stop", "title", "desc", "text", "tspan", "style"}
     if root.tag != "{http://www.w3.org/2000/svg}svg":
         raise ValueError("Source must be a plain SVG document with the SVG namespace.")
     for element in root.iter():
-        if element.tag.rsplit("}", 1)[-1] not in allowed:
+        local_tag = element.tag.rsplit("}", 1)[-1]
+        if local_tag not in allowed:
             raise ValueError("Unsupported SVG element. Export a plain vector SVG with inline attributes.")
+        if local_tag == "style":
+            _check_style_text(element.text)
         for key, value in element.attrib.items():
             local = key.rsplit("}", 1)[-1].lower()
             if local.startswith("on") or (local == "href" and not value.startswith("#")):
@@ -66,12 +78,31 @@ def _svg_image(path, render_size):
         raise ValueError("SVG needs a viewBox or numeric pixel width and height.") from exc
     if not all(math.isfinite(n) and n > 0 for n in (width, height)):
         raise ValueError("SVG dimensions must be finite and positive.")
+    return data, width, height
+
+
+def _svg_image(path, render_size):
+    try:
+        import cairosvg
+    except (ImportError, OSError) as exc:
+        raise ValueError('SVG support needs CairoSVG and Cairo. Install with: pip install ".[svg]". See README for system setup.') from exc
+    data, width, height = _validated_svg(path)
     scale = render_size / max(width, height)
     out_width, out_height = max(1, round(width * scale)), max(1, round(height * scale))
     png = cairosvg.svg2png(bytestring=data, unsafe=False,
                           output_width=out_width, output_height=out_height)
     with Image.open(BytesIO(png)) as image:
         return image.convert("RGBA")
+
+
+def svg_to_pdf(path):
+    """Vector PDF bytes for a validated SVG source; the artwork stays vector."""
+    try:
+        import cairosvg
+    except (ImportError, OSError) as exc:
+        raise ValueError('Vector PDF output needs CairoSVG and Cairo. Install with: pip install ".[svg]".') from exc
+    data, _, _ = _validated_svg(path)
+    return cairosvg.svg2pdf(bytestring=data, unsafe=False)
 
 
 def load_image(path, render_size=2048):

@@ -1,11 +1,16 @@
-"""Convenient export sizes, not a promise of platform upload acceptance."""
+"""Export sizes from the platform presets data file; convenient sizes, not upload guarantees."""
 
 from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
 import re
+
+import yaml
 
 
 MAX_SIDE = 8192
 MAX_PIXELS = 32_000_000
+PRESETS_FILE = "platform-presets.yaml"
 
 
 @dataclass(frozen=True)
@@ -16,27 +21,39 @@ class Preset:
     group: str
     purpose: str
     max_kb: int | None = None
+    safe_area: tuple | None = None
+    background: bool = False
+    standard: bool = True
 
 
-PRESETS = (
-    Preset("youtube-watermark-150", 150, 150, "youtube", "Video watermark"),
-    Preset("youtube-profile-800", 800, 800, "youtube", "Channel profile"),
-    Preset("favicon-16", 16, 16, "web", "Tiny browser icon"),
-    Preset("favicon-32", 32, 32, "web", "Browser icon"),
-    Preset("favicon-180", 180, 180, "web", "Touch icon size"),
-    Preset("favicon-192", 192, 192, "web", "Small app icon size"),
-    Preset("favicon-512", 512, 512, "web", "Large app icon size"),
-    Preset("social-linkedin-400", 400, 400, "social", "Profile image starting size"),
-    Preset("social-x-400", 400, 400, "social", "Profile image starting size"),
-    Preset("social-facebook-500", 500, 500, "social", "Profile image starting size"),
-    Preset("social-instagram-320", 320, 320, "social", "Profile image starting size"),
-    Preset("doc-header-600", 600, 600, "docs", "Document logo"),
-    Preset("email-signature-200", 200, 200, "docs", "Email logo"),
-    Preset("slide-deck-1000", 1000, 1000, "docs", "Presentation logo"),
-    Preset("master-2048", 2048, 2048, "master", "Large raster derivative, not original artwork"),
-)
+def load_platform_presets():
+    """The raw presets document, including each entry's source and checked date."""
+    with resources.as_file(resources.files("logo_sizes") / "data" / PRESETS_FILE) as path:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("presets"), list):
+        raise ValueError(f"{PRESETS_FILE} must contain a 'presets' list.")
+    return data
+
+
+def _preset_from_entry(entry):
+    safe = entry.get("safe_area")
+    return Preset(str(entry["name"]), int(entry["width"]), int(entry["height"]), str(entry["group"]),
+                  str(entry.get("purpose", "")), entry.get("max_kb"),
+                  (int(safe[0]), int(safe[1])) if safe else None, bool(entry.get("background", False)),
+                  bool(entry.get("standard", True)))
+
+
+PRESETS = tuple(_preset_from_entry(entry) for entry in load_platform_presets()["presets"])
+STANDARD_PRESETS = tuple(p for p in PRESETS if p.standard)
 GROUPS = tuple(sorted({p.group for p in PRESETS}))
 VARIANTS = ("original", "white", "black", "grayscale", "inverted")
+
+
+def preset_named(name):
+    for preset in PRESETS:
+        if preset.name == name:
+            return preset
+    raise ValueError(f"Unknown preset '{name}'. Use --list to see the available names.")
 
 
 def parse_size(value):
@@ -51,8 +68,7 @@ def parse_size(value):
 
 
 def slugify(filename):
-    from pathlib import Path
-    stem = Path(filename).stem.lower().replace("'", "").replace("\u2019", "")
+    stem = Path(filename).stem.lower().replace("'", "").replace("’", "")
     slug = re.sub(r"[^a-z0-9]+", "-", stem).strip("-") or "logo"
     reserved = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
                 *(f"lpt{i}" for i in range(1, 10))}

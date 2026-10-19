@@ -401,3 +401,90 @@ class BrandConfigCliTests(CliTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("missing.png", result.stdout + result.stderr)
         self.assertFalse(self.outputs.exists())
+
+
+class DigitalKitCoverageTests(CliTestCase):
+    """Banners with safe areas, web drop-in files, vector print output and preview mocks."""
+
+    def test_default_run_writes_exactly_the_standard_presets(self):
+        self.success("--no-icons", "--no-preview", "--no-zip")
+        names = {p.stem for p in (self.outputs / "demo" / "original").glob("*.png")}
+        self.assertEqual(len(names), 15)
+        self.assertNotIn("youtube-banner-2560", names)
+
+    def test_banner_fits_art_in_the_safe_area_and_takes_a_background(self):
+        Image.new("RGBA", (100, 100), (255, 0, 0, 255)).save(self.source)
+        self.success("--preset", "youtube-banner-2560", "--banner-background", "#123456", "--no-icons", "--no-zip")
+        with Image.open(self.outputs / "demo" / "original" / "youtube-banner-2560.png") as out:
+            self.assertEqual(out.size, (2560, 1440))
+            self.assertEqual(out.getpixel((0, 0)), (0x12, 0x34, 0x56, 255))
+            red = Image.eval(out.getchannel("R"), lambda v: 255 if v == 255 else 0).getbbox()
+            left, top = (2560 - 1546) // 2, (1440 - 423) // 2
+            self.assertGreaterEqual(red[0], left)
+            self.assertGreaterEqual(red[1], top)
+            self.assertLessEqual(red[2], left + 1546)
+            self.assertLessEqual(red[3], top + 423)
+        self.assertTrue((self.outputs / "demo" / "preview-banners.png").is_file())
+        manifest = json.loads((self.outputs / "demo" / "kit.json").read_text())
+        files = {f["path"]: f for f in manifest["files"]}
+        self.assertEqual(files["original/youtube-banner-2560.png"]["safe_area"], [1546, 423])
+
+    def test_banner_without_background_stays_transparent(self):
+        self.success("--preset", "x-header-1500", "--no-icons", "--no-preview", "--no-zip")
+        with Image.open(self.outputs / "demo" / "original" / "x-header-1500.png") as out:
+            self.assertEqual(out.size, (1500, 500))
+            self.assertEqual(out.getpixel((0, 0))[3], 0)
+
+    def test_web_dropin_files_are_complete(self):
+        brand = self.root / "brand.yaml"
+        brand.write_text("brand: Web Co\nsources: {primary: input/demo.png}\nsizes: {presets: [favicon-32, og-image-1200]}\n"
+                         "web: {name: Web Company, short_name: WebCo, theme_color: '#112233', background_color: '#ffffff'}\n")
+        self.success("kit", "--brand", str(brand), "--no-preview", "--no-zip", source=False)
+        web = self.outputs / "web-co" / "web"
+        manifest = json.loads((web / "site.webmanifest").read_text())
+        self.assertEqual(manifest["name"], "Web Company")
+        self.assertEqual(manifest["short_name"], "WebCo")
+        self.assertEqual(manifest["theme_color"], "#112233")
+        self.assertEqual(manifest["background_color"], "#ffffff")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(manifest["start_url"], "/")
+        self.assertEqual({i["sizes"] for i in manifest["icons"]}, {"192x192", "512x512"})
+        for icon in manifest["icons"]:
+            self.assertTrue((web / icon["src"].lstrip("/")).is_file())
+        head = (web / "head.html").read_text()
+        self.assertIn('rel="manifest" href="/site.webmanifest"', head)
+        self.assertIn('name="theme-color" content="#112233"', head)
+        self.assertIn('rel="apple-touch-icon"', head)
+        self.assertIn('property="og:image" content="/og-image-1200.png"', head)
+        self.assertTrue((web / "favicon.ico").is_file())
+        self.assertTrue((web / "og-image-1200.png").is_file())
+        self.assertFalse((web / "favicon.svg").exists())
+
+    def test_preview_has_profile_circle_and_tab_mock_columns(self):
+        self.success("--size", "s=64x64", "--no-icons", "--no-zip")
+        with Image.open(self.outputs / "demo" / "preview.png") as out:
+            self.assertEqual(out.size[0], 360 * 4)
+
+    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    def test_svg_source_gets_favicon_passthrough_and_vector_print_pdf(self):
+        self.source = self.inputs / "vector.svg"
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><style>.a{fill:#ff0000}</style>'
+               '<rect class="a" width="100" height="50"/></svg>')
+        self.source.write_text(svg)
+        self.success("--size", "banner=100x50", "--padding", "0", "--no-preview", "--no-zip")
+        kit = self.outputs / "vector"
+        with Image.open(kit / "original" / "banner.png") as out:
+            self.assertEqual(out.getpixel((0, 0)), (255, 0, 0, 255))
+        self.assertEqual((kit / "web" / "favicon.svg").read_text(), svg)
+        self.assertIn('rel="icon" type="image/svg+xml" href="/favicon.svg"', (kit / "web" / "head.html").read_text())
+        self.assertEqual((kit / "print" / "vector.pdf").read_bytes()[:4], b"%PDF")
+
+    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    def test_svg_style_blocks_with_imports_or_urls_are_still_refused(self):
+        self.source = self.inputs / "styled.svg"
+        for css in ("@import url(x.css);", ".a{fill:url(http://example.com/a.png)}", ".a{fill:red}/*c*/"):
+            with self.subTest(css=css):
+                self.source.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><style>{css}</style>'
+                                       '<rect class="a" width="20" height="20"/></svg>')
+                self.assertNotEqual(self.run_tool(*SMALL).returncode, 0)
+                self.assertFalse((self.outputs / "styled").exists())

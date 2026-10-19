@@ -14,7 +14,7 @@ import zipfile
 from PIL import Image, ImageDraw, ImageFont
 
 from . import __version__
-from .imaging import fit_canvas, make_variant
+from .imaging import fit_canvas, make_variant, svg_to_pdf
 
 
 SYMBOL_MAX_SIDE = 64      # sizes at or under this use the symbol source when one exists
@@ -53,10 +53,25 @@ class BuildOptions:
     background: dict | None = None
     trim: int | None = None
     maps: dict = field(default_factory=dict)
+    banner_background: tuple | None = None
+    web: dict = field(default_factory=dict)
 
 
 def _write_json(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+
+def render_preset(image, preset, padding, upscale, banner_background=None):
+    """Fit art into a preset; banners keep the art inside the safe area and may take a flat background."""
+    if preset.safe_area:
+        inner = fit_canvas(image, preset.safe_area, padding, upscale)
+        canvas = Image.new("RGBA", (preset.width, preset.height), (0, 0, 0, 0))
+        canvas.alpha_composite(inner, ((preset.width - inner.width) // 2, (preset.height - inner.height) // 2))
+    else:
+        canvas = fit_canvas(image, (preset.width, preset.height), padding, upscale)
+    if preset.background and banner_background:
+        canvas = Image.alpha_composite(Image.new("RGBA", canvas.size, tuple(banner_background[:3]) + (255,)), canvas)
+    return canvas
 
 
 def choose_source(sources, width, height):
@@ -89,18 +104,48 @@ def write_icons(pick, folder, padding, upscale, background):
     _write_json(folder / "manifest.webmanifest", {"icons": manifest_icons})
 
 
+def _circle_mock(image, size, background):
+    """The art fitted into a circular profile crop, as social sites display it."""
+    cell = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    disc = Image.new("RGBA", (size, size), background)
+    mask = Image.new("L", (size * 4, size * 4), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, size * 4 - 1, size * 4 - 1), fill=255)
+    mask = mask.resize((size, size), Image.Resampling.LANCZOS)
+    disc.alpha_composite(fit_canvas(image, (size, size), 0.08))
+    cell.paste(disc, (0, 0), mask)
+    return cell
+
+
+def _tab_mock(image, width, dark):
+    """A browser tab strip with the 16 px icon, on a light or dark theme."""
+    bar = Image.new("RGBA", (width, 34), "#202124" if dark else "#dee1e6")
+    draw = ImageDraw.Draw(bar)
+    draw.rounded_rectangle((8, 4, 200, 33), radius=8, fill="#35363a" if dark else "#ffffff")
+    bar.alpha_composite(fit_canvas(image, (16, 16), 0.08), (20, 13))
+    draw.text((44, 11), "Tab title", fill="#e8eaed" if dark else "#202124", font=ImageFont.load_default(size=13))
+    return bar
+
+
 def write_preview(images, folder, exports):
     cell_width, row_height = 360, 300
-    preview = Image.new("RGB", (cell_width * 3, 52 + row_height * len(images)), "#eeeeee")
+    columns = ("White", "Dark", "Transparency", "Profile and tabs")
+    preview = Image.new("RGB", (cell_width * len(columns), 52 + row_height * len(images)), "#eeeeee")
     draw = ImageDraw.Draw(preview)
     font = ImageFont.load_default(size=17)
-    draw.text((20, 16), "Logo variants and small-size checks", font=font, fill="black")
+    draw.text((20, 16), "Logo variants, profile crops and small-size checks", font=font, fill="black")
     for row, (name, image) in enumerate(images.items()):
         y = 52 + row * row_height
-        for column, label in enumerate(("White", "Dark", "Transparency")):
+        for column, label in enumerate(columns):
             x = column * cell_width
             draw.text((x + 16, y + 8), f"{name.title()} / {label}", fill="black", font=font)
             background = Image.new("RGBA", (328, 244), "#ffffff" if column != 1 else "#202020")
+            if column == 3:
+                background.alpha_composite(_circle_mock(image, 150, "#f5f5f5"), (8, 6))
+                background.alpha_composite(_circle_mock(image, 150, "#202020"), (170, 6))
+                background.alpha_composite(_tab_mock(image, 328, False), (0, 168))
+                background.alpha_composite(_tab_mock(image, 328, True), (0, 208))
+                preview.paste(background.convert("RGB"), (x + 16, y + 36))
+                continue
             if column == 2:
                 checker = ImageDraw.Draw(background)
                 for top in range(0, 244, 16):
@@ -119,11 +164,84 @@ def write_preview(images, folder, exports):
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Logo kit preview</title>
 <style>body{{font:17px system-ui,sans-serif;margin:2rem auto;padding:0 1rem;max-width:1100px;background:#f3f3f3;color:#222}}img{{max-width:100%;height:auto}}a{{color:#164b8b}}li{{margin:.4rem 0}}</style>
-<h1>Logo kit preview</h1><p>Inspect the white, dark and checkerboard backgrounds. Small samples below each logo are 16, 32 and 48 pixels.</p>
-<img src="preview.png" alt="Logo variants on white, dark and checkerboard backgrounds, with small icon samples">
+<h1>Logo kit preview</h1><p>Inspect the white, dark and checkerboard backgrounds. Small samples below each logo are 16, 32 and 48 pixels. The last column shows circular profile crops and 16 pixel browser tabs.</p>
+<img src="preview.png" alt="Logo variants on white, dark and checkerboard backgrounds, with profile circles, tab bars and small icon samples">
 <p><a href="GUIDE.txt">Which file to use</a></p><h2>Exports</h2><ul>{links}</ul></html>
 '''
     (folder / "preview.html").write_text(page, encoding="utf-8")
+
+
+def write_banner_preview(renders, folder):
+    """Downscaled banners with their safe areas outlined, so the visible region is obvious."""
+    width = 720
+    rows = []
+    for preset, image in renders:
+        scale = width / preset.width
+        rows.append((preset, image.resize((width, max(1, round(preset.height * scale))), Image.Resampling.LANCZOS), scale))
+    height = sum(40 + r[1].height + 16 for r in rows) + 16
+    page = Image.new("RGB", (width + 32, height), "#eeeeee")
+    draw = ImageDraw.Draw(page)
+    font = ImageFont.load_default(size=16)
+    y = 16
+    for preset, small, scale in rows:
+        draw.text((16, y), f"{preset.name}: {preset.width} x {preset.height}, safe area "
+                           f"{preset.safe_area[0]} x {preset.safe_area[1]}", fill="black", font=font)
+        y += 28
+        checker = Image.new("RGB", small.size, "#cccccc")
+        page.paste(checker, (16, y))
+        page.paste(small.convert("RGB"), (16, y), small.getchannel("A"))
+        safe_w, safe_h = preset.safe_area[0] * scale, preset.safe_area[1] * scale
+        left, top = 16 + (small.width - safe_w) / 2, y + (small.height - safe_h) / 2
+        draw.rectangle((left, top, left + safe_w, top + safe_h), outline="#d62828", width=2)
+        y += small.height + 28
+    page.save(folder / "preview-banners.png", optimize=True)
+
+
+def write_web(folder, slug, sources, options, exports, details):
+    """A drop-in web/ folder: icons, a complete manifest, head.html and a favicon.svg when the source is vector."""
+    web = folder / "web"
+    web.mkdir()
+    icons = folder / "original" / "app-icons"
+    copied = []
+    for name in ("favicon.ico", "apple-touch-icon.png", "icon-192.png", "icon-512.png",
+                 "icon-maskable-192.png", "icon-maskable-512.png"):
+        shutil.copy2(icons / name, web / name)
+        copied.append(name)
+    primary = sources["primary"]
+    if primary.vector:
+        shutil.copy2(primary.path, web / "favicon.svg")
+        copied.append("favicon.svg")
+    og = folder / "original" / "og-image-1200.png"
+    if og.is_file():
+        shutil.copy2(og, web / og.name)
+        copied.append(og.name)
+    settings = options.web or {}
+    manifest = {"name": settings.get("name", slug), "short_name": settings.get("short_name", settings.get("name", slug))[:12],
+                "icons": [{"src": f"/icon-{size}.png", "sizes": f"{size}x{size}", "type": "image/png", "purpose": "any"}
+                          for size in (192, 512)]
+                + [{"src": f"/icon-maskable-{size}.png", "sizes": f"{size}x{size}", "type": "image/png", "purpose": "maskable"}
+                   for size in (192, 512)],
+                "display": "standalone", "start_url": "/"}
+    for key in ("theme_color", "background_color"):
+        if settings.get(key):
+            manifest[key] = settings[key]
+    _write_json(web / "site.webmanifest", manifest)
+    lines = ["<!-- Paste inside <head>. Paths assume the web/ files sit at the site root. -->",
+             '<link rel="icon" href="/favicon.ico" sizes="any">']
+    if primary.vector:
+        lines.append('<link rel="icon" type="image/svg+xml" href="/favicon.svg">')
+    lines += ['<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+              '<link rel="manifest" href="/site.webmanifest">']
+    if settings.get("theme_color"):
+        lines.append(f'<meta name="theme-color" content="{html.escape(settings["theme_color"], quote=True)}">')
+    if og.is_file():
+        lines += [f'<meta property="og:image" content="/{og.name}">',
+                  '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">']
+    (web / "head.html").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    for name in copied + ["site.webmanifest", "head.html"]:
+        relative = f"web/{name}"
+        exports.append(relative)
+        details[relative] = {"purpose": "Web drop-in file", "source": "primary"}
 
 
 GUIDE = '''LOGO KIT - WHICH FILE TO USE
@@ -144,6 +262,13 @@ your application's manifest and adjust the paths for your website.
 Maskable icons have extra safe padding and an opaque background.
 White variants use a dark icon background by default; others use white.
 The --icon-background option overrides that choice for all variants.
+
+web/ is a drop-in set for a website root: the original-variant icons, a
+complete site.webmanifest, head.html with the matching tags, favicon.svg
+when the source was SVG, and the Open Graph image when that size was made.
+Banner sizes keep the artwork inside the platform's safe area; see
+preview-banners.png. A flat --banner-background fills them when set.
+print/<name>.pdf is a vector PDF, written only for SVG sources.
 
 Use preview.html or preview.png to inspect dark/light contrast and tiny
 icon legibility. A detailed wordmark often needs separate symbol-only art.
@@ -185,15 +310,17 @@ def generate_kit(sources, slug, work, options, notes):
         shutil.copy2(art.path, masters / (name + art.path.suffix.lower()))
     variants = {role: {variant: make_variant(art.image, variant, options.maps) for variant in options.variants}
                 for role, art in sources.items()}
-    exports, details, warnings = [], {}, []
+    exports, details, warnings, banners = [], {}, [], []
     for name in options.variants:
         variant_dir = folder / name
         variant_dir.mkdir()
         for preset in options.presets:
             role = choose_source(sources, preset.width, preset.height)
             art = sources[role]
-            fitted = fit_canvas(variants[role][name], (preset.width, preset.height), options.padding,
-                                options.upscale or art.vector)
+            fitted = render_preset(variants[role][name], preset, options.padding, options.upscale or art.vector,
+                                   options.banner_background)
+            if preset.safe_area and name == "original":
+                banners.append((preset, fitted))
             for format_name in options.formats:
                 path = variant_dir / f"{preset.name}.{format_name}"
                 if format_name == "webp":
@@ -204,6 +331,8 @@ def generate_kit(sources, slug, work, options, notes):
                 exports.append(relative)
                 details[relative] = {"width": preset.width, "height": preset.height, "variant": name,
                                      "preset": preset.name, "purpose": preset.purpose, "source": role}
+                if preset.safe_area:
+                    details[relative]["safe_area"] = list(preset.safe_area)
                 size = path.stat().st_size
                 if preset.max_kb is not None and size > preset.max_kb * 1024:
                     warnings.append(f"{relative} is {size / 1024:.1f} KB, over the {preset.max_kb} KB "
@@ -216,8 +345,18 @@ def generate_kit(sources, slug, work, options, notes):
             write_icons(pick, variant_dir / "app-icons", options.padding,
                         options.upscale or primary.vector, background)
             exports.extend(p.relative_to(folder).as_posix() for p in sorted((variant_dir / "app-icons").iterdir()))
+    if options.icons and "original" in options.variants:
+        write_web(folder, slug, sources, options, exports, details)
+    if primary.vector:
+        printable = folder / "print"
+        printable.mkdir()
+        (printable / f"{slug}.pdf").write_bytes(svg_to_pdf(primary.path))
+        exports.append(f"print/{slug}.pdf")
+        details[f"print/{slug}.pdf"] = {"purpose": "Vector PDF from the SVG source", "source": "primary"}
     if options.preview:
         write_preview(variants["primary"], folder, exports)
+        if banners:
+            write_banner_preview(banners, folder)
     (folder / "GUIDE.txt").write_text(GUIDE, encoding="utf-8")
     metadata = {
         "generator_version": __version__, "brand": slug, "source_name": primary.path.name,
@@ -226,7 +365,8 @@ def generate_kit(sources, slug, work, options, notes):
                            "vector": art.vector, "background": art.background} for role, art in sources.items()},
         "variants": list(options.variants), "formats": list(options.formats), "padding": options.padding,
         "upscale_raster": options.upscale, "background": options.background, "trim": options.trim,
-        "notes": notes, "warnings": warnings, "files": [],
+        "banner_background": "#%02x%02x%02x" % tuple(options.banner_background[:3]) if options.banner_background else None,
+        "web": options.web or None, "notes": notes, "warnings": warnings, "files": [],
     }
     for path in sorted(folder.rglob("*")):
         if path.is_file():

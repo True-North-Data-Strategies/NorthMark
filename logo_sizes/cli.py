@@ -15,7 +15,7 @@ from .dtf import (DtfRequest, UVDTF, build_dtf, garment_colors, load_order, load
                   placement_box, placement_names)
 from .gang import build_gang, load_job, pack
 from .kit import BuildOptions, SourceArt, generate_kit, publish, publish_kit
-from .presets import GROUPS, PRESETS, VARIANTS, parse_size, slugify
+from .presets import GROUPS, PRESETS, STANDARD_PRESETS, VARIANTS, parse_size, preset_named, slugify
 from .report import print_file_table
 
 
@@ -65,6 +65,7 @@ def parser_for_cli():
     parser.add_argument("--trim", action="store_true", help="Crop to the artwork before fitting.")
     parser.add_argument("--trim-threshold", type=int, default=8, help="Alpha level that counts as artwork when trimming, 0 to 255.")
     parser.add_argument("--icon-background", metavar="COLOR", help="Opaque app icon background; default dark for white variants, white otherwise.")
+    parser.add_argument("--banner-background", metavar="COLOR", help="Opaque background for banner and share sizes; default transparent.")
     parser.add_argument("--no-icons", action="store_true")
     parser.add_argument("--no-preview", action="store_true")
     parser.add_argument("--no-zip", action="store_true")
@@ -79,13 +80,11 @@ def select_options(args):
     if not 0 <= args.trim_threshold <= 255:
         raise ValueError("The trim threshold must be 0 to 255.")
     background = background_from_args(args)
-    presets = list(PRESETS)
+    presets = list(STANDARD_PRESETS)
     if args.group:
-        presets = [p for p in presets if p.group == args.group]
+        presets = [p for p in PRESETS if p.group == args.group]
     if args.preset:
-        presets = [p for p in presets if p.name == args.preset]
-        if not presets:
-            raise ValueError("Unknown preset. Use --list to see the available names.")
+        presets = [preset_named(args.preset)]
     if args.size:
         if not (args.group or args.preset):
             presets = []
@@ -94,17 +93,19 @@ def select_options(args):
         raise ValueError("Each selected size must have a different name.")
     variants = VARIANTS if "all" in args.variants else tuple(dict.fromkeys(args.variants))
     icon_color = opaque_color(args.icon_background) if args.icon_background else None
+    banner_color = opaque_color(args.banner_background) if args.banner_background else None
     return BuildOptions(tuple(presets), variants, tuple(dict.fromkeys(args.formats)), args.padding,
                         upscale=not args.no_upscale, icons=not args.no_icons, preview=not args.no_preview,
                         archive=not args.no_zip, icon_background=icon_color, background=background,
-                        trim=args.trim_threshold if args.trim else None)
+                        trim=args.trim_threshold if args.trim else None, banner_background=banner_color)
 
 
 def options_from_brand(args, brand):
     """A brand file supplies everything the selection flags would; refuse conflicting flags."""
     defaults = parser_for_cli().parse_args([])
     conflicting = [name for name in ("group", "preset", "size", "variants", "formats", "padding", "remove_background",
-                                     "background_mode", "tolerance", "feather", "trim", "icon_background", "source")
+                                     "background_mode", "tolerance", "feather", "trim", "icon_background",
+                                     "banner_background", "source")
                    if getattr(args, name) != getattr(defaults, name)]
     if conflicting:
         raise ValueError("With --brand, sources, sizes, variants and colors come from the configuration file. "
@@ -112,7 +113,8 @@ def options_from_brand(args, brand):
     return BuildOptions(brand.presets, brand.variants, brand.formats, brand.padding,
                         upscale=not args.no_upscale, icons=not args.no_icons, preview=not args.no_preview,
                         archive=not args.no_zip, icon_background=brand.icon_background + (255,) if brand.icon_background else None,
-                        background=brand.background, trim=brand.trim, maps=brand.maps)
+                        background=brand.background, trim=brand.trim, maps=brand.maps,
+                        banner_background=brand.banner_background, web=brand.web)
 
 
 def check_destination(root, slug, overwrite):
@@ -210,7 +212,9 @@ def run_kit(argv):
     args = parser.parse_args(argv)
     if args.list:
         for preset in PRESETS:
-            print(f"{preset.name:28} {preset.width:4}x{preset.height:<4} {preset.group:8} {preset.purpose}")
+            marker = "standard" if preset.standard else "optional"
+            print(f"{preset.name:24} {preset.width:4}x{preset.height:<4} {preset.group:8} {marker:8} {preset.purpose}")
+        print("Standard sizes are written by default; select optional sizes with --group, --preset or a brand file.")
         return 0
     try:
         brand = load_brand(args.brand) if args.brand else None

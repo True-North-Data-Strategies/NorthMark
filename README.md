@@ -1,4 +1,25 @@
-# Create Logos All Sizes
+<!-- TNDS-HEADER:BEGIN -->
+<div align="center">
+  <h1>Create Logos All Sizes</h1>
+  <h3>Makes logo sizes, color variants and brand kits from your source artwork.</h3>
+  <img src="https://raw.githubusercontent.com/Jjohnston70/Jjohnston70/main/true-north-logo-layered-v3.png" alt="True North Data Strategies" width="240" />
+  <br /><br />
+  <a href="#stack"><img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20Pillow-0A8EA0?style=for-the-badge" alt="Built with Python | Pillow" /></a>
+  <a href="https://truenorthstrategyops.com"><img src="https://img.shields.io/badge/Built%20by-TNDS-1F6FEB?style=for-the-badge" alt="Built by TNDS" /></a>
+  <a href="#contact"><img src="https://img.shields.io/badge/Contact-TNDS-181717?style=for-the-badge" alt="Contact" /></a>
+</div>
+<!-- TNDS-HEADER:END -->
+
+## Table of Contents
+
+[What This Is](#what-this-is) | [Quick start](#quick-start) |
+[Keep your artwork private](#keep-your-artwork-private) | [Color versions](#color-versions) |
+[Background removal](#explicit-background-removal) | [Layouts](#horizontal-stacked-and-symbol-artwork) |
+[SVG originals](#svg-originals) | [Kit contents](#what-is-in-a-kit) |
+[Standard sizes](#standard-export-sizes) | [Safe reruns](#safe-reruns-and-other-folders) |
+[Development](#development-and-installation) | [Stack](#stack) | [License](#license) | [Contact](#contact)
+
+## What This Is
 
 Turn source artwork into correctly proportioned PNGs, optional lossless WebP files,
 color variants, browser/app icons, previews and a ZIP you can hand to someone else.
@@ -248,3 +269,20 @@ SVG refusal rules. CI runs the suite with SVG support on Python 3.10, 3.12 and 3
 
 [MIT](LICENSE) for the software. No personal or client artwork is included.
 The software license grants no rights to any source artwork you process.
+
+## Stack
+
+| Layer | Tools |
+| --- | --- |
+| Runtime | Python 3.10 or newer |
+| Image processing | Pillow |
+| Optional SVG rendering | CairoSVG and Cairo |
+| Checks | Python unittest, GitHub Actions and the public-file check |
+
+<!-- TNDS-FOOTER:BEGIN -->
+## Contact
+
+Jacob Johnston | True North Data Strategies LLC, SDVOSB | Colorado Springs, Colorado
+
+jacob@truenorthstrategyops.com | [truenorthstrategyops.com](https://truenorthstrategyops.com) | [pipelinepunks.com](https://pipelinepunks.com)
+<!-- TNDS-FOOTER:END -->

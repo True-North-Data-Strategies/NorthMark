@@ -230,8 +230,10 @@ def detect_background(image, ring=2):
     inner = Image.new("L", (width - 2 * ring, height - 2 * ring), 0)
     border = Image.new("L", rgba.size, 255)
     border.paste(inner, (ring, ring))
-    translucent = rgba.getchannel("A").point(lambda v: 255 if v < 255 else 0)
-    if ImageChops.multiply(border, translucent).getbbox():
+    # Anti-aliased renders leave border pixels a few levels short of opaque; only real transparency counts.
+    translucent = rgba.getchannel("A").point(lambda v: 255 if v < 240 else 0)
+    border_pixels = border.histogram()[255]
+    if ImageChops.multiply(border, translucent).histogram()[255] > border_pixels * 0.02:
         raise ValueError("The border is already transparent; there is no flat background to detect.")
     samples = [pixel[:3] for pixel, flag in zip(rgba.getdata(), border.getdata()) if flag]
     color = tuple(sorted(channel)[len(samples) // 2] for channel in zip(*samples))

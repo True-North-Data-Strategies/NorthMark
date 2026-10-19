@@ -216,3 +216,27 @@ class DtfCliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+try:
+    import cairosvg  # noqa: F401
+    HAS_SVG = True
+except (ImportError, OSError):
+    HAS_SVG = False
+
+
+class VectorDtfTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
+    def test_vector_source_reaches_300_dpi_even_when_the_art_is_a_small_part_of_the_viewbox(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "mark.svg"
+            source.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">'
+                              '<rect x="300" y="250" width="400" height="500" fill="#102040"/></svg>')
+            result = subprocess.run([sys.executable, str(SCRIPT), "dtf", str(source), "--placement", "full-back",
+                                     "-o", str(root / "out")], capture_output=True, text=True, timeout=240)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn("enlarged", result.stdout.lower())
+            self.assertRegex(result.stdout, r"source DPI (3\d\d|[4-9]\d\d|\d{4,}) OK")
+            path = root / "out" / "mark" / "dtf" / "adult" / "full-back" / "original" / "mark-full-back-11.20x14.00in.png"
+            self.assertTrue(path.is_file(), result.stdout)

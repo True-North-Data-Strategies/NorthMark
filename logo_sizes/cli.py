@@ -413,6 +413,17 @@ def run_dtf(argv):
         refused = 0
         with output_lock(args.output_dir):
             sources = prepare_sources(roles, render_size, notes, background)
+            for role, art in list(sources.items()):
+                if not art.vector:
+                    continue
+                # A vector renders at any size. Re-render so the trimmed art, not the whole
+                # canvas, carries the pixels the largest placement needs.
+                _, box = trim_to_art(art.image, request.trim_threshold)
+                coverage = max((box[2] - box[0]) / art.image.width, (box[3] - box[1]) / art.image.height)
+                if coverage < 0.999:
+                    bigger = math.ceil(render_size / coverage) + 2
+                    sources.update(prepare_sources({role: art.path}, bigger, notes, background))
+                    notes.append(f"{role}: vector re-rendered at {bigger} px so the trimmed art reaches 300 DPI.")
             with tempfile.TemporaryDirectory(prefix=".logo-build-", dir=args.output_dir) as temporary:
                 folder, manifest, outputs = build_dtf(sources, request, data, Path(temporary))
                 backup = publish([(folder, destination)], root, f"{request.design}-dtf", args.overwrite)

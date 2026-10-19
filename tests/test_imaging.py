@@ -96,6 +96,14 @@ class BackgroundDetectionTests(unittest.TestCase):
         self.assertGreaterEqual(detected.feather, 180)
         self.assertLessEqual(detected.feather, 240)
 
+    def test_detection_tolerates_a_nearly_opaque_antialiased_border(self):
+        image = noisy_cream_disc(noise=0)
+        edge = Image.new("L", image.size, 254)
+        edge.paste(Image.new("L", (image.width - 2, image.height - 2), 255), (1, 1))
+        image.putalpha(edge)
+        detected = detect_background(image)
+        self.assertEqual(detected.color, CREAM)
+
     def test_detection_refuses_a_transparent_border(self):
         image = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
         ImageDraw.Draw(image).rectangle((10, 10, 29, 29), fill=NAVY + (255,))

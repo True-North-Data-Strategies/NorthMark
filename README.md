@@ -1,7 +1,7 @@
 <!-- TNDS-HEADER:BEGIN -->
 <div align="center">
   <h1>Create Logos All Sizes</h1>
-  <h3>Makes logo sizes, color variants and brand kits from your source artwork.</h3>
+  <h3>One clean master in, a digital kit and print-ready transfers out.</h3>
   <img src="https://raw.githubusercontent.com/Jjohnston70/Jjohnston70/main/true-north-logo-layered-v3.png" alt="True North Data Strategies" width="240" />
   <br /><br />
   <a href="#stack"><img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20Pillow-0A8EA0?style=for-the-badge" alt="Built with Python | Pillow" /></a>
@@ -14,32 +14,41 @@
 
 ## Contents
 
-[What this is](#what-this-is) | [Quick start](#quick-start) | [Keep your artwork private](#keep-your-artwork-private) |
-[Color versions](#color-versions) | [What is in a kit](#what-is-in-a-kit) |
-[Standard sizes](#standard-export-sizes) | [Development](#development-and-installation)
+[What this is](#what-this-is) | [Quick start](#quick-start) | [DTF quick start](#dtf-quick-start) |
+[Gang sheets](#gang-sheets) | [Keep your artwork private](#keep-your-artwork-private) |
+[Color versions](#color-versions) | [Background removal](#background-removal) |
+[Config reference](#config-reference) | [One master does it all](#one-master-does-it-all-when-it-does-and-when-it-doesnt) |
+[SVG originals](#svg-originals) | [What is in a kit](#what-is-in-a-kit) | [Export sizes](#export-sizes) |
+[Safe reruns](#safe-reruns-and-other-folders) | [Development](#development-and-installation) | [Manuals](#manuals)
 
 ## What this is
 
-Turn source artwork into correctly proportioned PNGs, optional lossless WebP files,
-color variants, browser/app icons, previews and a ZIP you can hand to someone else.
-Runs locally. No account, upload service or AI is required.
+Turn source artwork into correctly proportioned PNGs, lossless WebP, color variants,
+browser and app icons, a web drop-in folder, previews and a ZIP you can hand to someone
+else. Then take the same master to print: 300 DPI direct-to-film (DTF) transfer files at
+exact placement sizes, garment mockups, an order sheet, a press card, and gang sheets
+packed onto 22 inch rolls with a cut list. Runs locally. No account, upload service or
+AI is required.
 
-It removes the usual problems:
-
-- Hand-exporting the same logo at fifteen sizes for every new brand.
-- Round logos coming out as ovals or clipped, because a source was stretched or
-  cropped to fit a square.
-- A white box behind a logo that was supposed to be transparent.
-- A rerun quietly overwriting the last good set of files.
+| Problem it removes | How |
+| --- | --- |
+| Hand-exporting the same logo at fifteen sizes for every new brand | One command writes every size, variant and icon |
+| Round logos coming out as ovals or clipped | Fit, never crop or stretch; optional trim to the art first |
+| A cream or white halo around a logo that was "transparent" | Soft-edge matting with color decontamination |
+| A white box behind a logo that should be transparent | Explicit or measured background removal |
+| No real dark-background version of a logo | Named color-map variants, such as `reverse` |
+| Guessing the size to type into a printer's custom-size box | Exact inches to two decimals, per placement |
+| Ordering a transfer that prints blurry | An honest source-DPI verdict before any resampling |
+| A rerun quietly overwriting the last good set of files | Atomic publish with dated backups and a process lock |
 
 <p align="center">
-  <img src="docs/images/demo-preview.png" alt="Grid of logo color versions on white, dark and checkerboard backgrounds, with 16, 32 and 48 pixel samples under each" width="720" />
+  <img src="docs/images/demo-preview.png" alt="Grid of logo color versions on white, dark and checkerboard backgrounds, with circular profile crops, browser tab mocks and 16, 32 and 48 pixel samples" width="720" />
 </p>
 
-*The kit preview for the generated demo mark. Each color version sits on white, dark
-and transparent backgrounds, with 16, 32 and 48 pixel samples underneath. The empty
-white-on-white and black-on-dark cells are the point: they show which version not to
-use where.*
+*The kit preview for the generated demo mark. Each color version sits on white, dark and
+transparent backgrounds, then in circular profile crops and light and dark browser tabs.
+The empty white-on-white and black-on-dark cells are the point: they show which version
+not to use where.*
 
 ## Quick start
 
@@ -61,9 +70,9 @@ Put your original images in `local-assets/input`, then run:
 python make_logo_sizes.py
 ```
 
-Each image gets its own folder and ZIP under `local-assets/exports`. The default
-keeps the original colors, fits the complete source inside each canvas, and adds
-8% padding per side. Nothing is cropped or stretched. Existing output is refused.
+Each image gets its own folder and ZIP under `local-assets/exports`. The default keeps
+the original colors, fits the complete source inside each canvas, and adds 8% padding
+per side. Nothing is cropped or stretched. Existing output is refused.
 
 To try the tool without your own artwork:
 
@@ -72,34 +81,103 @@ python examples/make_demo.py
 python make_logo_sizes.py local-assets/input/demo-mark.png --variants all
 ```
 
-The example is a generic geometric mark generated locally; no brand artwork ships
-with this repository.
+The example is a generic geometric mark generated locally; no brand artwork ships with
+this repository. The installed command `logo-sizes` and `python -m logo_sizes` do the
+same thing as the wrapper script. Every v3 invocation still works unchanged; `kit` is
+its explicit name now that `dtf` and `gang` exist.
+
+## DTF quick start
+
+```sh
+python make_logo_sizes.py dtf local-assets/input/mark.png --placement full-back
+python make_logo_sizes.py dtf --brand local-assets/brands/my-brand.yaml --order local-assets/orders/2026-10-18-tees.yaml
+python make_logo_sizes.py dtf --list-placements
+```
+
+For each design, placement and variant the tool trims the art to its bounding box, fits
+it inside the vendor's average placement box while keeping the aspect ratio, and reports
+the exact width and height in inches. That pair of numbers is what you type into the
+vendor's custom-size box. The PNG has exactly that many pixels at 300 DPI and carries a
+300 DPI tag. It is never mirrored.
+
+| Output | Where | What it is for |
+| --- | --- | --- |
+| `dtf/<audience>/<placement>/<variant>/<design>-<placement>-<W>x<H>in.png` | per design | The file to upload, 300 DPI, hardened alpha |
+| `dtf/mockups/<placement>-<variant>-on-<garment>.png` | per design | Flat garment swatches at shirt scale; the only proof you get |
+| `dtf/order-sheet.csv` | per design | One row per transfer: inches, pixels, source DPI, warnings, file, qty |
+| `dtf/press-card.pdf` or `.png` | per design | Sizes, positions, variant per garment color, vendor press settings |
+| `dtf/dtf.json` | per design | Everything above as data, with checksums |
+
+The resolution verdict is the honest part. Source pixels divided by print inches is the
+real resolution, measured before any resampling. At or above 300 DPI is fine. Below 300
+warns. Below 150 refuses the file unless you pass `--allow-low-dpi`, and the summary
+then says the art was enlarged and gives the true source DPI. Setting a 300 DPI tag on
+too few pixels fixes nothing, so the tool never pretends otherwise. Every verdict comes
+with the pixel size that would reach 300.
+
+Other checks on every transfer: alpha is thresholded to opaque or clear with at most a
+one pixel soft edge (`--no-harden` keeps soft alpha, `--choke 1` trims fringe), strokes
+thinner than about 0.5 mm are estimated and flagged as industry guidance, and each
+variant's edge color is compared with each garment color so the summary can say, for
+example, "navy shirt: use reverse". Placements, average sizes, ranges, positions,
+garment swatches, press settings and bulk tiers all live in
+[`logo_sizes/data/ninja-placements.yaml`](logo_sizes/data/ninja-placements.yaml) with
+the date they were read. Where the vendor's pages disagree, both values are recorded and
+the safer one is used. Confirm current specs before ordering.
+
+## Gang sheets
+
+```sh
+python make_logo_sizes.py gang local-assets/orders/2026-10-18-gang.yaml
+python make_logo_sizes.py gang local-assets/orders/2026-10-18-gang.yaml --dry-run
+python make_logo_sizes.py gang job.csv --no-rotate --no-pdf
+```
+
+A job file lists designs or PNG files with sizes and quantities; see
+[`examples/gang-job.example.yaml`](examples/gang-job.example.yaml) and the CSV template in
+[`examples/templates/gang-job.csv`](examples/templates/gang-job.csv). Items that name a
+design, placement and variant pick up the matching DTF output automatically.
+
+| Output under `exports/gang-sheets/<job>/` | What it is |
+| --- | --- |
+| `sheet-22x<L>.png` | The sheet at 300 DPI, written in horizontal bands so long sheets stay in bounded memory |
+| `sheet-22x<L>.pdf` | The same sheet as a PDF; each transfer image is embedded once and placed per copy (needs `[print]`) |
+| `layout.json` | Every position in inches, sheet lengths, utilization, warnings, optional cost compare |
+| `cut-list.csv` | One row per placed copy, with a matching template in `examples/templates/` |
+| `preview.png` | Downscaled sheets with labeled boxes |
+
+Packing is deterministic shelf packing on the configured width, with a 0.25 inch gap and
+margin by default and 90 degree rotation allowed. The tool picks the shortest configured
+standard length that fits, or splits across sheets, and prints the utilization. Files
+over the 50 MB upload ceiling get a warning. Enter the vendor's current prices in the job
+file and the summary compares cost per transfer for gang sheets against by-size orders
+with the bulk tiers. Two vendor statements conflict on gang-sheet formats, so the tool
+writes both PNG and PDF and tells you to confirm with the vendor before the first upload.
 
 ## Keep your artwork private
 
 ```text
 create-logos-all-sizes/
   make_logo_sizes.py       command you run
-  logo_sizes/             public program code
-  tests/                  tests generate their own temporary artwork
-  examples/               generic example generator
-  docs/images/            generated demo art for this README, the only tracked images
-  local-assets/           IGNORED BY GIT: keep all your own material here
-    input/                original artwork
-    exports/              generated kits, previews and ZIPs
-      example/
-      example.zip
-      .backups/           previous kits kept by --overwrite
-    archive/              optional old files or other private material
+  logo_sizes/              public program code and vendor data files
+  tests/                   tests generate their own temporary artwork
+  examples/                generic example generator, example configs and CSV templates
+  docs/                    manuals, plus docs/images/ with the only tracked images
+  local-assets/            IGNORED BY GIT: keep all your own material here
+    input/                 original artwork
+    brands/<brand>.yaml    one configuration per brand
+    orders/                order files and gang-sheet jobs
+    exports/<brand>/       kits, dtf/ outputs and previews
+    exports/gang-sheets/   packed sheets
+    exports/.backups/      previous outputs kept by --overwrite
+    private-terms.txt      names that must never appear in tracked YAML or CSV
+    archive/               old files or other private material
 ```
 
-The entire `local-assets/` folder is ignored, including product and client files.
-Common artwork and archive extensions are also ignored outside that folder to
-reduce accidental additions. Git ignore is not encryption or access control, and
-`git add -f` can bypass it. Never force-add your artwork to a public repository.
-
-The one exception is `docs/images/`, which holds generated demo images for this
-README. The public-file check allows PNG files up to 500 KB in that folder only.
+The entire `local-assets/` folder is ignored, including brand files, orders and
+exports. Common artwork and archive extensions are also ignored outside that folder.
+Git ignore is not encryption or access control, and `git add -f` can bypass it. Never
+force-add your artwork to a public repository.
 
 Before publishing changes, run:
 
@@ -107,16 +185,17 @@ Before publishing changes, run:
 python tools/check_public_files.py
 ```
 
-This checks tracked filenames and obvious credential patterns. Review your staged
-changes too; it cannot recognize every private detail inside an arbitrary text file.
-The Python package explicitly includes only `logo_sizes`, not `local-assets`.
+This checks tracked filenames, obvious credential patterns, and, when
+`local-assets/private-terms.txt` exists, rejects any tracked YAML or CSV that mentions a
+listed term without echoing the term. Review your staged changes too; it cannot
+recognize every private detail inside an arbitrary text file. The Python package
+includes only `logo_sizes` and its data files, never `local-assets`.
 
 ## Color versions
 
 ```sh
 python make_logo_sizes.py --variants all
 python make_logo_sizes.py --variants original white black
-python make_logo_sizes.py --variants grayscale inverted
 ```
 
 | Version | Result |
@@ -126,63 +205,104 @@ python make_logo_sizes.py --variants grayscale inverted
 | `black` | Black artwork with the source alpha channel |
 | `grayscale` | Neutral shades with the source alpha channel |
 | `inverted` | Every RGB color negated; transparency stays the same |
+| any map name | A named recolor from the brand file, such as `reverse` or `one-color` |
 
-White and black versions need transparent source artwork. The tool refuses an
-opaque source for those versions so it does not silently produce a solid rectangle.
-An automatic color negative changes brand colors; inspect it before using it as a
-brand's reverse version. A designer-supplied reverse source may be more suitable.
+White and black versions need transparent source artwork; the tool refuses an opaque
+source for those so it never produces a solid rectangle. A map variant is the real
+answer for a reverse version: it recolors chosen colors and clears others, with a
+tolerance and an optional feather per entry, and leaves everything else alone. A logo
+whose enclosed background color stays opaque after edge-mode background removal becomes
+a usable dark-shirt version by mapping its outline to white and that enclosed color to
+transparent.
 
-## Explicit background removal
-
-Converting an image to PNG does not remove its background. For a clean, flat
-background, you can choose the background color yourself:
+## Background removal
 
 ```sh
 python make_logo_sizes.py logo.png --remove-background "#ffffff" --variants all
-python make_logo_sizes.py logo.png --remove-background white --tolerance 8
+python make_logo_sizes.py logo.png --remove-background auto
+python make_logo_sizes.py logo.png --remove-background "#faf6ee" --tolerance 4 --feather 200
 ```
 
-The default `edge` mode removes matching regions connected to the image boundary.
-It preserves enclosed details, such as a white feature inside a black shape.
-Tolerance is the maximum difference in any RGB channel, from 0 to 255; the default
-is an exact match. Low values are safer.
+| Option | Effect |
+| --- | --- |
+| `--remove-background COLOR` | Make that flat color transparent; `edge` mode keeps enclosed areas |
+| `--remove-background auto` | Measure the border color and its noise, print the values used, then remove it |
+| `--tolerance N` | Pixels within N of the color in any channel are fully removed |
+| `--feather N` | Alpha ramps over the next N levels and the background color is subtracted from edge pixels |
+| `--background-mode all` | Remove every matching pixel, including enclosed details |
+| `--trim` | Crop to the artwork bounding box before fitting, so a framed master does not come out small |
 
-To remove matching colors everywhere, including enclosed details, explicitly use:
+A hard cut leaves a one or two pixel ring of blended background color around
+anti-aliased art, which shows as a light halo on a dark surface. Feathering fixes it: set
+the feather close to the contrast between the art and its background, which is what
+`auto` does. Background removal only runs when asked, and the tool never guesses
+silently.
+
+## Config reference
+
+A brand file is the template-plus-config way to run the tool: the program is the
+template and each brand gets one YAML file. Copy
+[`examples/brand.example.yaml`](examples/brand.example.yaml) to
+`local-assets/brands/<brand>.yaml`, then:
 
 ```sh
-python make_logo_sizes.py logo.png --remove-background white --background-mode all
+python make_logo_sizes.py kit --brand local-assets/brands/my-brand.yaml
+python make_logo_sizes.py dtf --brand local-assets/brands/my-brand.yaml
 ```
 
-Background removal is not a substitute for a clean transparent master. Textured
-backgrounds, shadows and antialiased edges need careful inspection. The tool never
-guesses which color should be removed. An original copy remains in the kit.
+| Key | Purpose |
+| --- | --- |
+| `brand`, `slug` | Display name and output folder name |
+| `sources.primary`, `symbol`, `horizontal` | The full logo; a mark for 64 px and under and small DTF placements; banner art |
+| `colors` | Named colors used by maps, backgrounds and garments |
+| `background` | `color` (a color or `auto`), `mode`, `tolerance`, `feather` |
+| `trim` | `enabled` and `threshold` |
+| `padding`, `formats`, `variants` | As on the command line; variants may include map names |
+| `maps` | Named lists of `{from, to, tolerance, feather}`; `to: transparent` clears |
+| `sizes` | `groups`, `presets` and `custom` sizes; omit the block for the standard set |
+| `icon_background`, `banner_background` | Opaque fills for maskable icons and for banner sizes |
+| `web` | `name`, `short_name`, `theme_color`, `background_color` for the web drop-in files |
+| `dtf` | `audience`, `placements`, `variants`, `garments`, `symbol_for`, `overrides` |
+| `uvdtf` | Sticker sizes in inches, same 300 DPI rules, no garment mockups |
+
+Paths are relative to the brand file. Every key is validated before any artwork is read,
+and unknown keys are errors. With `--brand`, the size, variant and color flags are
+refused so there is one source of truth. The user manual lists every key with its
+defaults.
+
+## One master does it all: when it does and when it doesn't
+
+| Situation | Verdict |
+| --- | --- |
+| A clean transparent PNG of at least 2048 px for digital use | Yes. One master covers every kit size |
+| A vector SVG master | Yes, for everything. DTF files render at a true 300 DPI and a vector PDF is written |
+| A flat-background PNG with anti-aliased edges | Yes, with `--remove-background auto` or a brand `background` block |
+| A dark-shirt version of a logo with an enclosed light fill | Yes, with a `reverse` map; the tool cannot invent one from alpha alone |
+| A chest-size version of a logo with a tagline or fine detail | Usually not. The thin-stroke check will say so; supply a `symbol` master |
+| A full-back transfer from a raster master under about 3300 px on its long side | No. The DPI verdict fails and names the pixel size you need |
+| Navy art on a navy shirt | No file can fix that; the contrast check recommends another variant |
+
+The tool reports every one of these plainly in the run summary and in `kit.json`,
+`dtf.json` and the order sheet, so you never have to open an image to find out.
 
 ## Horizontal, stacked and symbol artwork
 
 Provide a separate source design for each layout. The tool sizes them; it does not
-rearrange lettering, invent a symbol or trace raster artwork into vector paths.
-Use custom rectangular canvases for horizontal logos and banners:
+rearrange lettering, invent a symbol or trace raster artwork into vector paths. A brand
+file's `symbol` source is used for sizes of 64 px and under and for the DTF placements
+listed in `symbol_for`; its `horizontal` source is used for canvases at least twice as
+wide as they are tall. Without a brand file, use custom canvases:
 
 ```sh
-python make_logo_sizes.py brand-horizontal.png --size header=1200x300 --size signature=600x150
-python make_logo_sizes.py brand-stacked.png --size stacked=800x1000
+python make_logo_sizes.py brand-horizontal.png --size header=1200x300
 python make_logo_sizes.py brand-symbol.png --group web --variants all
+python make_logo_sizes.py --padding 0.12 --no-upscale --formats png webp
 ```
 
 Custom sizes replace the standard list unless you also select a `--group` or
-`--preset`, in which case they are added. Each name must be unique. Padding is a
-fraction of each canvas dimension on each side:
-
-```sh
-python make_logo_sizes.py --padding 0.12
-python make_logo_sizes.py --no-upscale
-python make_logo_sizes.py --formats png webp
-```
-
-`--no-upscale` keeps raster artwork at or below its source pixel dimensions inside
-the requested canvas. Raster enlargement otherwise produces a warning. PNG/WebP
-exports use RGB color; print size, DPI and CMYK requirements belong to your printer's
-specifications, not the preset's pixel count.
+`--preset`, in which case they are added. `--no-upscale` keeps raster artwork at or
+below its source pixel dimensions inside the requested canvas; raster enlargement
+otherwise produces a note.
 
 ## SVG originals
 
@@ -193,62 +313,63 @@ python -m pip install -e ".[svg]"
 ```
 
 CairoSVG also needs the Cairo system library. On macOS, install it with
-`brew install cairo`; on Debian/Ubuntu use `sudo apt-get install libcairo2`.
-For Windows setup, see the [CairoSVG installation instructions](https://cairosvg.org/documentation/).
+`brew install cairo`; on Debian/Ubuntu use `sudo apt-get install libcairo2`. For Windows
+setup, see the [CairoSVG installation instructions](https://cairosvg.org/documentation/).
 Raster inputs work without CairoSVG or Cairo.
 
-Provide a plain, self-contained SVG with a `viewBox` or numeric pixel width and
-height. Path-based artwork is preferable to text that depends on installed fonts.
-External resources, embedded images, stylesheets, scripts, entities and unsupported
-SVG elements are refused. Export SVG styles as inline attributes if necessary.
-
-The original SVG is copied unchanged to `masters/source.svg`. It stays vector.
-PNG and WebP outputs are rendered derivatives. The tool does not create a true
-vector master from a PNG or JPEG. SVG features supported by CairoSVG have limits;
-check the output against your source.
+Provide a plain, self-contained SVG with a `viewBox` or numeric pixel width and height.
+Path-based artwork is preferable to text that depends on installed fonts. External
+resources, embedded images, scripts, entities, imports and `url()` references are
+refused; a `<style>` block with plain fill, stroke and font rules is accepted. The
+original SVG is copied unchanged to `masters/source.svg` and to `web/favicon.svg`, and a
+vector `print/<slug>.pdf` is written. The tool does not create a vector master from a
+PNG or JPEG.
 
 ## What is in a kit
 
-- A folder for each selected color version, containing the requested image sizes.
-- `app-icons/` per version: six-size `favicon.ico`, 192/512 regular and maskable
-  icons, an opaque 180px Apple touch icon, and a web manifest icon fragment.
-- `preview.png` and `preview.html`: white, dark and checkerboard backgrounds with
-  16, 32 and 48 pixel samples to reveal unreadable details.
-- `masters/source.*`: the untouched original, including any source metadata.
-- `GUIDE.txt`: which files to use and the important limitations.
-- `kit.json`: options, source checksum, notes and file checksums, without absolute
-  local paths.
-- A sibling ZIP containing only that complete kit.
-
-Maskable icons get extra padding to keep the complete artwork inside the safe
-circle. Their backgrounds are opaque. White variants default to a dark background;
-other variants default to white. Override every variant's icon background with
-`--icon-background "#123456"`. Merge `manifest.webmanifest`'s icon entries into your
-application manifest and adjust paths; the fragment is not a complete app manifest.
-
-Skip parts with `--no-icons`, `--no-preview` or `--no-zip`.
-
-## Standard export sizes
-
-Use `--list` for the complete list. The original 15 presets remain available:
-
-| Group | Sizes in pixels |
+| Part | Contents |
 | --- | --- |
-| `youtube` | Watermark 150, profile 800 |
-| `web` | 16, 32, 180, 192, 512 |
-| `social` | LinkedIn 400, X 400, Facebook 500, Instagram 320 |
-| `docs` | Document 600, email 200, slide 1000 |
-| `master` | 2048 raster derivative |
+| `<variant>/` | Every selected size as PNG, and WebP if requested |
+| `<variant>/app-icons/` | Six-size `favicon.ico`, 192 and 512 regular and maskable icons, Apple touch icon, manifest icon fragment |
+| `web/` | Drop-in files for a site root: icons, complete `site.webmanifest`, `head.html`, `favicon.svg` and the Open Graph image when made |
+| `print/<slug>.pdf` | Vector PDF, SVG sources only |
+| `preview.png`, `preview.html` | White, dark and checkerboard backgrounds, profile circles, tab mocks, 16, 32 and 48 px samples |
+| `preview-banners.png` | Each banner size with its safe area outlined |
+| `masters/` | The untouched primary (`source.*`), symbol and horizontal originals |
+| `GUIDE.txt` | Which files to use and the important limitations |
+| `kit.json` | Options, sources with checksums, and every file's size, checksum, variant, preset, purpose and source role |
+| `<slug>.zip` | The complete kit, as a sibling file |
+
+Every run ends with a readable summary: each file and its size in KB, a total, every
+warning (including per-preset size caps) and every note. Skip parts with `--no-icons`,
+`--no-preview` or `--no-zip`.
+
+## Export sizes
+
+Use `--list` for the complete list with sources. The original fifteen sizes are the
+standard set and are written by a run with no size flags; the rectangular sizes are
+optional and selected explicitly. All of them come from
+[`logo_sizes/data/platform-presets.yaml`](logo_sizes/data/platform-presets.yaml) with a
+source and the date it was read.
+
+| Group | Sizes in pixels | Default |
+| --- | --- | --- |
+| `youtube` | Watermark 150, profile 800 | Yes |
+| `web` | 16, 32, 180, 192, 512 | Yes |
+| `social` | LinkedIn 400, X 400, Facebook 500, Instagram 320 | Yes |
+| `docs` | Document 600, email 200, slide 1000 | Yes |
+| `master` | 2048 raster derivative | Yes |
+| `banners` | YouTube banner 2560x1440 with a 1546x423 safe area and 6 MB cap, X header 1500x500, LinkedIn cover 1128x191 and 4200x700 (conflicting specs, both provided) | No |
+| `share` | Open Graph image 1200x630 | No |
 
 ```sh
-python make_logo_sizes.py --group web
-python make_logo_sizes.py --preset favicon-32
-python make_logo_sizes.py --list
+python make_logo_sizes.py --group banners --banner-background "#0f2340"
+python make_logo_sizes.py --preset og-image-1200
 ```
 
-These are convenient starting sizes, not current platform acceptance guarantees.
-Requirements can change. `master-2048.png` is an export, not a replacement for the
-untouched original or a vector master.
+Banner sizes keep the artwork inside the platform's safe area and take an optional
+opaque `--banner-background`. These are convenient starting sizes, not current platform
+acceptance guarantees.
 
 ## Safe reruns and other folders
 
@@ -258,45 +379,52 @@ python make_logo_sizes.py --overwrite
 python make_logo_sizes.py -i /path/to/originals -o /path/to/exports
 ```
 
-`--overwrite` backs up the previous entire kit and ZIP before publishing the new
-ones. Files you added inside the old kit are preserved in that backup. Failed
-builds do not replace a previous kit. Duplicate output names are caught before any
-batch writes. Rename colliding sources such as `brand.png` and `brand.jpg`.
+`--overwrite` backs up the previous output before publishing the new one, for kits, DTF
+folders and gang sheets alike. Failed builds never replace a previous result. Duplicate
+output names are caught before any batch writes. Dry runs check paths, names and
+options without decoding artwork. A failed source produces a nonzero exit status; other
+valid sources still finish.
 
-Dry runs check paths, names and options, but do not decode or validate artwork.
-A failed source produces a nonzero exit status; other valid sources can still
-finish. An output lock prevents two processes from publishing into the same output
-folder at once. If a run is killed, remove `.logo-kit.lock` only after checking that
-no export is still running.
+An output lock prevents two processes from publishing into the same folder at once. The
+lock records its process id and host. If that process has exited on the same machine,
+the next run clears the stale lock itself and says so; a lock from a live process or
+another machine is respected.
 
 ## Development and installation
 
 ```sh
-python -m pip install -e ".[svg]"
+python -m pip install -e ".[svg,print]"
 python -m unittest discover -s tests -v
 python tools/check_public_files.py
 ```
 
-You can also run `python -m logo_sizes` or the installed `logo-sizes` command.
-When run from the checkout, default folders belong to the checkout. A standalone
-package installation uses `local-assets` in the current working directory.
-
-Tests create temporary generic images and exercise real exports, pixels,
-transparency, background removal, duplicate protection, backups, icons, ZIPs and
-SVG refusal rules. CI runs the suite with SVG support on Python 3.10, 3.12 and 3.14.
+Tests create temporary generic images and exercise real exports, pixels, transparency,
+matting, color maps, brand files, DTF sizing and verdicts, gang-sheet packing, backups,
+locks, icons, ZIPs and SVG refusal rules. CI runs the suite on Ubuntu, macOS and Windows
+for Python 3.10, 3.12 and 3.14, with SVG checks skipped where Cairo is unavailable, then
+runs the public-file check. Dependabot keeps the SHA-pinned actions current. Pushing a
+`v*` tag builds the wheel and sdist, refuses any private file in the build, and
+publishes a GitHub release.
 
 To regenerate the README image after changing the preview:
 
 ```sh
-python examples/make_demo.py        # skip if local-assets/input/demo-mark.png exists
+python examples/make_demo.py
 python make_logo_sizes.py local-assets/input/demo-mark.png --variants all --overwrite
 cp local-assets/exports/demo-mark/preview.png docs/images/demo-preview.png
 ```
 
+## Manuals
+
+| Document | For |
+| --- | --- |
+| [User manual](docs/USER-MANUAL.md) | Every command, flag, file format and output, with troubleshooting |
+| [Developer manual](docs/DEVELOPER-MANUAL.md) | Module map, data files, publishing and locking, tests, releases, security notes |
+
 ## License
 
-[MIT](LICENSE) for the software. No personal or client artwork is included.
-The software license grants no rights to any source artwork you process.
+[MIT](LICENSE) for the software. No personal or client artwork is included. The
+software license grants no rights to any source artwork you process.
 
 ## Stack
 
@@ -304,8 +432,10 @@ The software license grants no rights to any source artwork you process.
 | --- | --- |
 | Runtime | Python 3.10 or newer |
 | Image processing | Pillow |
-| Optional SVG rendering | CairoSVG and Cairo |
-| Checks | Python unittest, GitHub Actions and the public-file check |
+| Configuration | PyYAML, safe loader only |
+| Optional SVG rendering and vector PDF | CairoSVG and Cairo (`[svg]`) |
+| Optional press card and gang-sheet PDF | reportlab (`[print]`) |
+| Checks | Python unittest, GitHub Actions on three operating systems, the public-file check |
 
 <!-- TNDS-FOOTER:BEGIN -->
 ## Contact

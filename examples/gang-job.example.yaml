@@ -1,0 +1,27 @@
+# Example gang-sheet job for `logo-sizes gang`.
+# Copy it to local-assets/orders/<date>-<name>.yaml (git ignores that folder).
+#
+# Items can reference finished DTF outputs by design, placement and variant
+# (resolved under the output folder), or point at any transparent PNG with
+# `file` and an explicit size in inches. Sizes keep their aspect ratio.
+
+job: example-job
+
+sheet:
+  width_in: 22                  # vendor sheet width; the placements file carries the default
+  lengths_ft: [2, 5, 10, 15, 20]  # standard lengths to choose from; confirm at order time
+  gap_in: 0.25                  # space between transfers; not a vendor figure, confirm it
+  margin_in: 0.25               # clear border around the sheet; not a vendor figure
+  rotate: true                  # allow 90 degree rotation to pack tighter
+
+items:
+  - {design: example-brand, placement: full-back, variant: original, qty: 2}
+  - {design: example-brand, placement: left-chest, variant: reverse, qty: 2}
+  - {file: ../input/example-sticker.png, width_in: 4, height_in: 6, qty: 1}
+
+prices:                         # optional; enter the vendor's current prices to compare costs
+  currency: USD
+  gang_sheet_by_length_ft: {2: 0.00, 5: 0.00, 10: 0.00}   # replace zeros with the live prices
+  by_size:                      # per-transfer price for each placement at quantity one
+    full-back: 0.00
+    left-chest: 0.00

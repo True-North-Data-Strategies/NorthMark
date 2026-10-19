@@ -10,6 +10,8 @@
 *.egg-info/
 .venv/
 __pycache__/
+.ruff_cache/
+.pytest_cache/
 *.py[cod]
 .DS_Store
 .env

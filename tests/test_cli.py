@@ -1,9 +1,11 @@
 """End-to-end checks with generated artwork, never private brand assets."""
 
 import hashlib
-import importlib.util
 import json
+import os
 from pathlib import Path
+import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -14,11 +16,18 @@ from PIL import Image, ImageDraw
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "make_logo_sizes.py"
+try:
+    import cairosvg  # noqa: F401
+    HAS_SVG = True
+except (ImportError, OSError):
+    HAS_SVG = False
 SMALL = ("--size", "sample=20x20", "--padding", "0", "--no-icons",
          "--no-preview", "--no-zip")
 
 
-class LogoToolTests(unittest.TestCase):
+class CliTestCase(unittest.TestCase):
+    """Shared temporary input/output folders and a generated source image."""
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -33,6 +42,9 @@ class LogoToolTests(unittest.TestCase):
 
     def run_tool(self, *args, source=True):
         command = [sys.executable, str(SCRIPT)]
+        if args and args[0] in ("kit", "dtf", "gang"):
+            command.append(args[0])
+            args = args[1:]
         if source:
             command.append(str(self.source))
         command.extend(["-i", str(self.inputs), "-o", str(self.outputs), *args])
@@ -48,6 +60,8 @@ class LogoToolTests(unittest.TestCase):
         with Image.open(self.outputs / "demo" / variant / "sample.png") as im:
             return im.getpixel(point)
 
+
+class LogoToolTests(CliTestCase):
     def test_fit_preserves_both_ends_of_wide_artwork(self):
         im = Image.new("RGBA", (100, 50), (0, 255, 0, 255))
         draw = ImageDraw.Draw(im)
@@ -251,7 +265,7 @@ class LogoToolTests(unittest.TestCase):
             with Image.open(self.outputs / "demo" / "original" / f"{name}.png") as out:
                 self.assertEqual(out.size, (size, size))
 
-    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
     def test_vector_source_is_rendered_and_original_is_preserved(self):
         self.source = self.inputs / "vector.svg"
         svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50" fill="red"/></svg>'
@@ -263,7 +277,7 @@ class LogoToolTests(unittest.TestCase):
             self.assertEqual(out.getpixel((0, 0)), (255, 0, 0, 255))
         self.assertTrue(json.loads((kit / "kit.json").read_text())["vector_source"])
 
-    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
     def test_svg_external_resources_and_entities_are_refused(self):
         self.source = self.inputs / "unsafe.svg"
         for content in [
@@ -279,3 +293,272 @@ class LogoToolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PhaseOneCliTests(CliTestCase):
+    """Automatic background detection, feathered edges and the run summary."""
+
+    def noisy_source(self):
+        im = Image.new("RGB", (60, 60), (250, 246, 238))
+        px = im.load()
+        for y in range(60):
+            for x in range(60):
+                px[x, y] = (250 + (x % 3) - 1, 246 - (y % 3) + 1, 238 + ((x + y) % 2))
+        ImageDraw.Draw(im).ellipse((15, 15, 44, 44), fill=(15, 35, 64))
+        im.save(self.source)
+
+    def test_auto_background_removal_reports_color_and_tolerance(self):
+        self.noisy_source()
+        result = self.success("--size", "sample=60x60", "--padding", "0", "--no-icons",
+                              "--no-preview", "--no-zip", "--remove-background", "auto")
+        text = (result.stdout + result.stderr).lower()
+        self.assertIn("tolerance", text)
+        found = re.search(r"color #([0-9a-f]{6})", text)
+        self.assertIsNotNone(found, text)
+        detected = bytes.fromhex(found.group(1))
+        for channel, expected in zip(detected, (250, 246, 238)):
+            self.assertLessEqual(abs(channel - expected), 2)
+        self.assertEqual(self.pixel("original", (1, 1))[3], 0)
+        self.assertEqual(self.pixel("original", (30, 30)), (15, 35, 64, 255))
+
+    def test_feather_requires_background_removal(self):
+        result = self.run_tool(*SMALL, "--feather", "20")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.outputs.exists())
+
+    def test_run_summary_lists_each_file_with_kilobytes(self):
+        result = self.success(*SMALL)
+        self.assertRegex(result.stdout, r"original/sample\.png\s+[\d.]+ KB")
+        self.assertIn("Total:", result.stdout)
+
+
+class BrandConfigCliTests(CliTestCase):
+    """Kits driven by a brand configuration file."""
+
+    def write_brand(self, text):
+        path = self.root / "brand.yaml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_kit_subcommand_matches_the_legacy_invocation(self):
+        self.success(*SMALL)
+        legacy = (self.outputs / "demo" / "original" / "sample.png").read_bytes()
+        result = subprocess.run([sys.executable, str(SCRIPT), "kit", str(self.source), "-i", str(self.inputs),
+                                 "-o", str(self.root / "out2"), *SMALL], capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.root / "out2" / "demo" / "original" / "sample.png").read_bytes(), legacy)
+
+    def test_brand_config_builds_named_map_variant(self):
+        im = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle((4, 4, 35, 35), fill=(15, 35, 64, 255))
+        draw.rectangle((12, 12, 27, 27), fill=(250, 246, 238, 255))
+        im.save(self.inputs / "primary.png")
+        brand = self.write_brand(
+            "brand: Sample Co\nsources: {primary: input/primary.png}\n"
+            "colors: {ink: '#0f2340', paper: '#faf6ee'}\n"
+            "maps:\n  reverse:\n    - {from: ink, to: '#ffffff'}\n    - {from: paper, to: transparent}\n"
+            "variants: [original, reverse]\nsizes: {custom: ['sample=40x40']}\npadding: 0\n")
+        result = self.success("kit", "--brand", str(brand), "--no-icons", "--no-preview", "--no-zip", source=False)
+        kit = self.outputs / "sample-co"
+        self.assertTrue(kit.is_dir(), result.stdout)
+        with Image.open(kit / "reverse" / "sample.png") as out:
+            self.assertEqual(out.getpixel((6, 6)), (255, 255, 255, 255))
+            self.assertEqual(out.getpixel((20, 20))[3], 0)
+        with Image.open(kit / "original" / "sample.png") as out:
+            self.assertEqual(out.getpixel((20, 20)), (250, 246, 238, 255))
+        manifest = json.loads((kit / "kit.json").read_text())
+        self.assertEqual(manifest["brand"], "sample-co")
+        self.assertIn("reverse", manifest["variants"])
+
+    def test_symbol_and_horizontal_sources_are_used_where_they_fit(self):
+        Image.new("RGBA", (100, 100), (255, 0, 0, 255)).save(self.inputs / "primary.png")
+        Image.new("RGBA", (100, 100), (0, 0, 255, 255)).save(self.inputs / "symbol.png")
+        Image.new("RGBA", (300, 100), (0, 255, 0, 255)).save(self.inputs / "wide.png")
+        brand = self.write_brand(
+            "brand: Multi\nsources: {primary: input/primary.png, symbol: input/symbol.png, horizontal: input/wide.png}\n"
+            "sizes: {custom: ['tiny=32x32', 'big=200x200', 'banner=300x100']}\npadding: 0\n")
+        self.success("kit", "--brand", str(brand), "--no-icons", "--no-preview", "--no-zip", source=False)
+        kit = self.outputs / "multi" / "original"
+        with Image.open(kit / "tiny.png") as out:
+            self.assertEqual(out.getpixel((16, 16)), (0, 0, 255, 255))
+        with Image.open(kit / "big.png") as out:
+            self.assertEqual(out.getpixel((100, 100)), (255, 0, 0, 255))
+        with Image.open(kit / "banner.png") as out:
+            self.assertEqual(out.getpixel((150, 50)), (0, 255, 0, 255))
+        manifest = json.loads((self.outputs / "multi" / "kit.json").read_text())
+        files = {f["path"]: f for f in manifest["files"]}
+        self.assertEqual(files["original/tiny.png"]["source"], "symbol")
+        self.assertEqual(files["original/banner.png"]["source"], "horizontal")
+        self.assertEqual(files["original/big.png"]["source"], "primary")
+        self.assertTrue((self.outputs / "multi" / "masters" / "symbol.png").is_file())
+
+    def test_trim_fills_the_canvas_with_framed_artwork(self):
+        im = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+        ImageDraw.Draw(im).rectangle((40, 40, 59, 59), fill=(255, 0, 0, 255))
+        im.save(self.source)
+        self.success("--size", "s=50x50", "--padding", "0", "--no-icons", "--no-preview", "--no-zip", "--trim")
+        with Image.open(self.outputs / "demo" / "original" / "s.png") as out:
+            self.assertEqual(out.getchannel("A").getbbox(), (0, 0, 50, 50))
+
+    def test_brand_file_with_missing_source_fails_before_writing(self):
+        brand = self.write_brand("brand: Ghost\nsources: {primary: input/missing.png}\n")
+        result = self.run_tool("kit", "--brand", str(brand), source=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing.png", result.stdout + result.stderr)
+        self.assertFalse(self.outputs.exists())
+
+
+class DigitalKitCoverageTests(CliTestCase):
+    """Banners with safe areas, web drop-in files, vector print output and preview mocks."""
+
+    def test_default_run_writes_exactly_the_standard_presets(self):
+        self.success("--no-icons", "--no-preview", "--no-zip")
+        names = {p.stem for p in (self.outputs / "demo" / "original").glob("*.png")}
+        self.assertEqual(len(names), 15)
+        self.assertNotIn("youtube-banner-2560", names)
+
+    def test_banner_fits_art_in_the_safe_area_and_takes_a_background(self):
+        Image.new("RGBA", (100, 100), (255, 0, 0, 255)).save(self.source)
+        self.success("--preset", "youtube-banner-2560", "--banner-background", "#123456", "--no-icons", "--no-zip")
+        with Image.open(self.outputs / "demo" / "original" / "youtube-banner-2560.png") as out:
+            self.assertEqual(out.size, (2560, 1440))
+            self.assertEqual(out.getpixel((0, 0)), (0x12, 0x34, 0x56, 255))
+            red = Image.eval(out.getchannel("R"), lambda v: 255 if v == 255 else 0).getbbox()
+            left, top = (2560 - 1546) // 2, (1440 - 423) // 2
+            self.assertGreaterEqual(red[0], left)
+            self.assertGreaterEqual(red[1], top)
+            self.assertLessEqual(red[2], left + 1546)
+            self.assertLessEqual(red[3], top + 423)
+        self.assertTrue((self.outputs / "demo" / "preview-banners.png").is_file())
+        manifest = json.loads((self.outputs / "demo" / "kit.json").read_text())
+        files = {f["path"]: f for f in manifest["files"]}
+        self.assertEqual(files["original/youtube-banner-2560.png"]["safe_area"], [1546, 423])
+
+    def test_banner_without_background_stays_transparent(self):
+        self.success("--preset", "x-header-1500", "--no-icons", "--no-preview", "--no-zip")
+        with Image.open(self.outputs / "demo" / "original" / "x-header-1500.png") as out:
+            self.assertEqual(out.size, (1500, 500))
+            self.assertEqual(out.getpixel((0, 0))[3], 0)
+
+    def test_web_dropin_files_are_complete(self):
+        brand = self.root / "brand.yaml"
+        brand.write_text("brand: Web Co\nsources: {primary: input/demo.png}\nsizes: {presets: [favicon-32, og-image-1200]}\n"
+                         "web: {name: Web Company, short_name: WebCo, theme_color: '#112233', background_color: '#ffffff'}\n")
+        self.success("kit", "--brand", str(brand), "--no-preview", "--no-zip", source=False)
+        web = self.outputs / "web-co" / "web"
+        manifest = json.loads((web / "site.webmanifest").read_text())
+        self.assertEqual(manifest["name"], "Web Company")
+        self.assertEqual(manifest["short_name"], "WebCo")
+        self.assertEqual(manifest["theme_color"], "#112233")
+        self.assertEqual(manifest["background_color"], "#ffffff")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(manifest["start_url"], "/")
+        self.assertEqual({i["sizes"] for i in manifest["icons"]}, {"192x192", "512x512"})
+        for icon in manifest["icons"]:
+            self.assertTrue((web / icon["src"].lstrip("/")).is_file())
+        head = (web / "head.html").read_text()
+        self.assertIn('rel="manifest" href="/site.webmanifest"', head)
+        self.assertIn('name="theme-color" content="#112233"', head)
+        self.assertIn('rel="apple-touch-icon"', head)
+        self.assertIn('property="og:image" content="/og-image-1200.png"', head)
+        self.assertTrue((web / "favicon.ico").is_file())
+        self.assertTrue((web / "og-image-1200.png").is_file())
+        self.assertFalse((web / "favicon.svg").exists())
+
+    def test_preview_has_profile_circle_and_tab_mock_columns(self):
+        self.success("--size", "s=64x64", "--no-icons", "--no-zip")
+        with Image.open(self.outputs / "demo" / "preview.png") as out:
+            self.assertEqual(out.size[0], 360 * 4)
+
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
+    def test_svg_source_gets_favicon_passthrough_and_vector_print_pdf(self):
+        self.source = self.inputs / "vector.svg"
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><style>.a{fill:#ff0000}</style>'
+               '<rect class="a" width="100" height="50"/></svg>')
+        self.source.write_text(svg)
+        self.success("--size", "banner=100x50", "--padding", "0", "--no-preview", "--no-zip")
+        kit = self.outputs / "vector"
+        with Image.open(kit / "original" / "banner.png") as out:
+            self.assertEqual(out.getpixel((0, 0)), (255, 0, 0, 255))
+        self.assertEqual((kit / "web" / "favicon.svg").read_text(), svg)
+        self.assertIn('rel="icon" type="image/svg+xml" href="/favicon.svg"', (kit / "web" / "head.html").read_text())
+        self.assertEqual((kit / "print" / "vector.pdf").read_bytes()[:4], b"%PDF")
+
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
+    def test_svg_style_blocks_with_imports_or_urls_are_still_refused(self):
+        self.source = self.inputs / "styled.svg"
+        for css in ("@import url(x.css);", ".a{fill:url(http://example.com/a.png)}", ".a{fill:red}/*c*/"):
+            with self.subTest(css=css):
+                self.source.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><style>{css}</style>'
+                                       '<rect class="a" width="20" height="20"/></svg>')
+                self.assertNotEqual(self.run_tool(*SMALL).returncode, 0)
+                self.assertFalse((self.outputs / "styled").exists())
+
+
+class LockFileTests(CliTestCase):
+    """The output lock names its process and host, and clears itself only when that process is gone."""
+
+    def test_lock_records_pid_and_host_and_is_removed_after_the_run(self):
+        self.outputs.mkdir()
+        lock = self.outputs / ".logo-kit.lock"
+        result = self.success(*SMALL)
+        self.assertFalse(lock.exists(), result.stdout)
+
+    def test_stale_lock_from_a_dead_process_on_this_host_is_cleared(self):
+        self.outputs.mkdir()
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait()
+        (self.outputs / ".logo-kit.lock").write_text(f"pid: {dead.pid}\nhost: {socket.gethostname()}\n", encoding="utf-8")
+        result = self.success(*SMALL)
+        self.assertIn("stale lock", (result.stdout + result.stderr).lower())
+        self.assertTrue((self.outputs / "demo" / "original" / "sample.png").is_file())
+
+    def test_lock_held_by_a_live_process_is_respected(self):
+        self.outputs.mkdir()
+        (self.outputs / ".logo-kit.lock").write_text(f"pid: {os.getpid()}\nhost: {socket.gethostname()}\n", encoding="utf-8")
+        result = self.run_tool(*SMALL)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(".logo-kit.lock", result.stdout + result.stderr)
+        self.assertFalse((self.outputs / "demo").exists())
+
+    def test_lock_from_another_host_is_respected(self):
+        self.outputs.mkdir()
+        (self.outputs / ".logo-kit.lock").write_text("pid: 1\nhost: some-other-machine\n", encoding="utf-8")
+        result = self.run_tool(*SMALL)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.outputs / "demo").exists())
+
+
+class ReviewFindingCliTests(CliTestCase):
+    def test_overwrite_without_zip_retires_the_previous_archive(self):
+        self.success(*SMALL[:-1])
+        self.assertTrue((self.outputs / "demo.zip").is_file())
+        self.success(*SMALL, "--overwrite")
+        self.assertFalse((self.outputs / "demo.zip").exists())
+        self.assertTrue(any((self.outputs / ".backups").glob("*/demo.zip")))
+
+    def test_stale_lock_reclaim_happens_once(self):
+        from logo_sizes.cli import reclaim_stale_lock
+        self.outputs.mkdir()
+        lock = self.outputs / ".logo-kit.lock"
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait()
+        lock.write_text(f"pid: {dead.pid}\nhost: {socket.gethostname()}\n", encoding="utf-8")
+        self.assertTrue(reclaim_stale_lock(lock))
+        self.assertFalse(lock.exists())
+        self.assertFalse(reclaim_stale_lock(lock))
+
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
+    def test_icons_do_not_upscale_a_raster_symbol_when_asked_not_to(self):
+        (self.inputs / "primary.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+                                                 '<rect width="100" height="100" fill="#f00"/></svg>')
+        Image.new("RGBA", (20, 20), (0, 0, 255, 255)).save(self.inputs / "symbol.png")
+        brand = self.root / "brand.yaml"
+        brand.write_text("brand: Mixed\nsources: {primary: input/primary.svg, symbol: input/symbol.png}\n"
+                         "sizes: {custom: ['s=64x64']}\npadding: 0\n")
+        self.success("kit", "--brand", str(brand), "--no-upscale", "--no-preview", "--no-zip", source=False)
+        with Image.open(self.outputs / "mixed" / "original" / "app-icons" / "favicon.ico") as ico:
+            ico.size = (64, 64)
+            box = ico.convert("RGBA").getchannel("A").getbbox()
+            self.assertLessEqual(box[2] - box[0], 20)

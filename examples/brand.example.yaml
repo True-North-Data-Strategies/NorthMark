@@ -1,0 +1,68 @@
+# Example brand configuration for NorthMark.
+# Copy this file to local-assets/brands/<your-brand>.yaml (git ignores that
+# folder) and point the sources at your own artwork. Every value here is a
+# generic placeholder; no real brand data ships with the repository.
+#
+# Paths are relative to this file's folder. From local-assets/brands/ the
+# input folder is ../input/.
+
+brand: Example Brand
+slug: example-brand                # output folder name; defaults to a slug of the brand name
+
+sources:
+  primary: ../input/example-primary.png        # required; the full logo
+  symbol: ../input/example-symbol.png          # optional; used at 64 px and under and for small DTF placements
+  horizontal: ../input/example-horizontal.png  # optional; used for banner-shaped sizes
+
+colors:                            # named colors you can reference below
+  ink: "#0f2340"
+  paper: "#faf6ee"
+  accent: "#e67814"
+
+background:                        # optional; omit to keep the source transparency as-is
+  color: auto                      # a color, a named color above, or auto to measure the border
+  mode: edge                       # edge keeps enclosed areas; all clears every match
+  tolerance: 0                     # 0 with auto means use the measured value
+  feather: 0                       # 0 with auto means use the measured value
+
+trim:
+  enabled: true                    # crop to the artwork before fitting
+  threshold: 8                     # alpha level that counts as artwork, 0 to 255
+
+padding: 0.08                      # fraction of each canvas side left clear
+
+variants: [original, white, black, reverse]
+
+maps:                              # named recolor variants; the name becomes a variant
+  reverse:
+    - {from: ink, to: "#ffffff", tolerance: 24}
+    - {from: paper, to: transparent, tolerance: 12}
+  one-color:
+    - {from: accent, to: ink, tolerance: 40}
+
+sizes:
+  groups: [web, social, docs, youtube, master]   # standard groups; omit the whole block for all presets
+  presets: []                                     # individual preset names from --list
+  custom: ["header=1200x300"]                     # extra sizes as name=WIDTHxHEIGHT
+
+formats: [png]                     # png and/or webp
+icon_background: "#ffffff"         # opaque color behind maskable and touch icons
+
+web:                               # used for site.webmanifest and head.html
+  name: Example Brand
+  short_name: Example
+  theme_color: "#0f2340"
+  background_color: "#ffffff"
+
+dtf:                               # direct-to-film transfer outputs (logo-sizes dtf)
+  audience: adult                  # adult, youth or womens
+  placements: [left-chest, full-front, full-back]
+  variants: [original, reverse]
+  garments: [white, navy, black]   # names from the garment list in the placements file
+  symbol_for: [left-chest, sleeve, back-collar]   # placements that use the symbol source
+  overrides:                       # optional exact box per placement, in inches
+    full-back: {width_in: 12, height_in: 14}
+
+uvdtf:                             # UV DTF stickers for hard goods; no garment mockups
+  sizes:
+    - {name: sticker-4x6, width_in: 4, height_in: 6}

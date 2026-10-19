@@ -1,0 +1,77 @@
+# Export sizes for `logo-sizes kit`. Convenient starting sizes, not a promise of
+# platform acceptance. Sizes marked standard are written by a run with no size
+# flags; the others are available with --group, --preset or a brand file.
+#
+# Each entry records where its numbers came from and when they were read.
+# Platforms change their requirements, so check before uploading.
+
+checked: 2026-10-18
+
+presets:
+  # Carried over from the v2 script. These were not re-verified on 2026-10-18.
+  - {name: youtube-watermark-150, width: 150, height: 150, group: youtube, purpose: "Video watermark", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: youtube-profile-800, width: 800, height: 800, group: youtube, purpose: "Channel profile", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: favicon-16, width: 16, height: 16, group: web, purpose: "Tiny browser icon", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: favicon-32, width: 32, height: 32, group: web, purpose: "Browser icon", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: favicon-180, width: 180, height: 180, group: web, purpose: "Touch icon size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: favicon-192, width: 192, height: 192, group: web, purpose: "Small app icon size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: favicon-512, width: 512, height: 512, group: web, purpose: "Large app icon size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: social-linkedin-400, width: 400, height: 400, group: social, purpose: "Profile image starting size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: social-x-400, width: 400, height: 400, group: social, purpose: "Profile image starting size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: social-facebook-500, width: 500, height: 500, group: social, purpose: "Profile image starting size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: social-instagram-320, width: 320, height: 320, group: social, purpose: "Profile image starting size", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: doc-header-600, width: 600, height: 600, group: docs, purpose: "Document logo", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: email-signature-200, width: 200, height: 200, group: docs, purpose: "Email logo", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: slide-deck-1000, width: 1000, height: 1000, group: docs, purpose: "Presentation logo", standard: true, note: "Carried over from v2; not re-verified."}
+  - {name: master-2048, width: 2048, height: 2048, group: master, purpose: "Large raster derivative, not original artwork", standard: true, note: "Carried over from v2; not re-verified."}
+
+  # Rectangular sizes with safe areas. Optional; select them explicitly.
+  - name: youtube-banner-2560
+    width: 2560
+    height: 1440
+    group: banners
+    purpose: "Channel banner; art is kept inside the 1546 x 423 safe area"
+    safe_area: [1546, 423]
+    max_kb: 6144
+    background: true
+    standard: false
+    source: "https://www.elev8or.io/tools/youtube-banner-resizer"
+    checked: 2026-10-18
+  - name: x-header-1500
+    width: 1500
+    height: 500
+    group: banners
+    purpose: "Profile header"
+    background: true
+    standard: false
+    source: "https://metricool.com/twitter-image-size/"
+    checked: 2026-10-18
+  - name: linkedin-cover-1128
+    width: 1128
+    height: 191
+    group: banners
+    purpose: "Company page cover, displayed size"
+    background: true
+    standard: false
+    source: "https://www.figma.com/resource-library/linkedin-size-guide/"
+    checked: 2026-10-18
+    note: "Conflicting specs: 1128 x 191 displayed versus a 4200 x 700 upload. Both sizes are provided."
+  - name: linkedin-cover-4200
+    width: 4200
+    height: 700
+    group: banners
+    purpose: "Company page cover, upload size"
+    background: true
+    standard: false
+    source: "https://socialk.it/en/sizes/linkedin-company-banner-size"
+    checked: 2026-10-18
+    note: "Conflicting specs: 1128 x 191 displayed versus a 4200 x 700 upload. Both sizes are provided."
+  - name: og-image-1200
+    width: 1200
+    height: 630
+    group: share
+    purpose: "Open Graph link preview image"
+    background: true
+    standard: false
+    source: "https://dev.to/grabbit/open-graph-image-sizes-and-dimensions-the-complete-2026-guide-1k16"
+    checked: 2026-10-18

@@ -3,14 +3,14 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "create-logos-all-sizes"
-version = "3.0.0"
-description = "Safe logo resizing, transparent color variants, previews and portable brand kits."
+name = "northmark"
+version = "4.0.0"
+description = "NorthMark: logo kits, 300 DPI DTF transfers and gang sheets from one clean master."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["Pillow>=12.1,<14"]
+dependencies = ["Pillow>=12.1,<14", "PyYAML>=6,<7"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
@@ -19,13 +19,18 @@ classifiers = [
 
 [project.optional-dependencies]
 svg = ["CairoSVG>=2.8,<3"]
+print = ["reportlab>=4,<6"]
 
 [project.scripts]
+northmark = "logo_sizes.cli:main"
 logo-sizes = "logo_sizes.cli:main"
 
 [project.urls]
-Repository = "https://github.com/True-North-Data-Strategies/create-logos-all-sizes"
-Issues = "https://github.com/True-North-Data-Strategies/create-logos-all-sizes/issues"
+Repository = "https://github.com/True-North-Data-Strategies/NorthMark"
+Issues = "https://github.com/True-North-Data-Strategies/NorthMark/issues"
 
 [tool.setuptools]
 packages = ["logo_sizes"]
+
+[tool.setuptools.package-data]
+logo_sizes = ["data/*.yaml"]

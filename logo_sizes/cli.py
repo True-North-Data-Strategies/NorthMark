@@ -338,6 +338,8 @@ def run_kit(argv):
                     print(f"DONE: {slug} -> {args.output_dir / slug}")
                     if backup:
                         print(f"  Previous kit kept at: {backup}")
+                        if (args.output_dir / slug / "dtf").is_dir():
+                            print("  Existing dtf/ kept with the new kit; it has its own backups.")
                     print_file_table(kit.manifest["files"])
                     for warning in kit.warnings:
                         print(f"  WARNING: {warning}")

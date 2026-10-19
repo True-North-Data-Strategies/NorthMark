@@ -588,3 +588,19 @@ class AutoBackgroundOnTransparentSourceTests(CliTestCase):
         with Image.open(self.outputs / "mixed" / "original" / "big.png") as out:
             self.assertEqual(out.getpixel((1, 1))[3], 0)
             self.assertEqual(out.getpixel((50, 50)), (15, 35, 64, 255))
+
+
+class KitOverwriteKeepsDtfTests(CliTestCase):
+    def test_kit_overwrite_carries_the_existing_dtf_output_across(self):
+        Image.new("RGBA", (300, 350), (200, 30, 30, 255)).save(self.source)
+        self.success(*SMALL)
+        dtf = subprocess.run([sys.executable, str(SCRIPT), "dtf", str(self.source), "--placement", "left-chest",
+                              "-o", str(self.outputs)], capture_output=True, text=True, cwd=self.root, timeout=120)
+        self.assertEqual(dtf.returncode, 0, dtf.stdout + dtf.stderr)
+        order_sheet = self.outputs / "demo" / "dtf" / "order-sheet.csv"
+        before = order_sheet.read_bytes()
+        result = self.success(*SMALL, "--overwrite")
+        self.assertTrue(order_sheet.is_file(), result.stdout)
+        self.assertEqual(order_sheet.read_bytes(), before)
+        self.assertTrue(any((self.outputs / ".backups").glob("*/demo/original/sample.png")))
+        self.assertIn("dtf/ kept", result.stdout)

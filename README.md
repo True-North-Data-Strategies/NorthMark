@@ -383,7 +383,7 @@ python make_logo_sizes.py -i /path/to/originals -o /path/to/exports
 ```
 
 `--overwrite` backs up the previous output before publishing the new one, for kits, DTF
-folders and gang sheets alike. Failed builds never replace a previous result. Duplicate
+folders and gang sheets alike. A kit rebuild keeps the design's existing `dtf/` folder. Failed builds never replace a previous result. Duplicate
 output names are caught before any batch writes. Dry runs check paths, names and
 options without decoding artwork. A failed source produces a nonzero exit status; other
 valid sources still finish.

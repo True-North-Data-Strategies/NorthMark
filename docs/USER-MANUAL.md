@@ -181,7 +181,8 @@ python make_logo_sizes.py dtf --list-placements
 | `-o`, `--overwrite`, `--dry-run` | As for kits | |
 
 The output lands in `<output>/<design>/dtf/` and is published as one unit: an
-existing `dtf/` folder needs `--overwrite`, which backs it up first. The art is always
+existing `dtf/` folder needs `--overwrite`, which backs it up first. Rebuilding the kit
+with `kit --overwrite` keeps the design's existing `dtf/` folder in place. The art is always
 trimmed to its bounding box per variant, so the stated size is the visible art.
 
 ### The resolution verdict

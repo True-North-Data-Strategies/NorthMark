@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -18,7 +19,9 @@ SMALL = ("--size", "sample=20x20", "--padding", "0", "--no-icons",
          "--no-preview", "--no-zip")
 
 
-class LogoToolTests(unittest.TestCase):
+class CliTestCase(unittest.TestCase):
+    """Shared temporary input/output folders and a generated source image."""
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -48,6 +51,8 @@ class LogoToolTests(unittest.TestCase):
         with Image.open(self.outputs / "demo" / variant / "sample.png") as im:
             return im.getpixel(point)
 
+
+class LogoToolTests(CliTestCase):
     def test_fit_preserves_both_ends_of_wide_artwork(self):
         im = Image.new("RGBA", (100, 50), (0, 255, 0, 255))
         draw = ImageDraw.Draw(im)
@@ -279,3 +284,40 @@ class LogoToolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PhaseOneCliTests(CliTestCase):
+    """Automatic background detection, feathered edges and the run summary."""
+
+    def noisy_source(self):
+        im = Image.new("RGB", (60, 60), (250, 246, 238))
+        px = im.load()
+        for y in range(60):
+            for x in range(60):
+                px[x, y] = (250 + (x % 3) - 1, 246 - (y % 3) + 1, 238 + ((x + y) % 2))
+        ImageDraw.Draw(im).ellipse((15, 15, 44, 44), fill=(15, 35, 64))
+        im.save(self.source)
+
+    def test_auto_background_removal_reports_color_and_tolerance(self):
+        self.noisy_source()
+        result = self.success("--size", "sample=60x60", "--padding", "0", "--no-icons",
+                              "--no-preview", "--no-zip", "--remove-background", "auto")
+        text = (result.stdout + result.stderr).lower()
+        self.assertIn("tolerance", text)
+        found = re.search(r"color #([0-9a-f]{6})", text)
+        self.assertIsNotNone(found, text)
+        detected = bytes.fromhex(found.group(1))
+        for channel, expected in zip(detected, (250, 246, 238)):
+            self.assertLessEqual(abs(channel - expected), 2)
+        self.assertEqual(self.pixel("original", (1, 1))[3], 0)
+        self.assertEqual(self.pixel("original", (30, 30)), (15, 35, 64, 255))
+
+    def test_feather_requires_background_removal(self):
+        result = self.run_tool(*SMALL, "--feather", "20")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.outputs.exists())
+
+    def test_run_summary_lists_each_file_with_kilobytes(self):
+        result = self.success(*SMALL)
+        self.assertRegex(result.stdout, r"original/sample\.png\s+[\d.]+ KB")
+        self.assertIn("Total:", result.stdout)

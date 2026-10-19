@@ -18,6 +18,14 @@ from .imaging import fit_canvas, make_variant
 
 
 @dataclass
+class KitResult:
+    folder: Path
+    archive: Path | None
+    manifest: dict
+    warnings: list
+
+
+@dataclass
 class BuildOptions:
     presets: tuple
     variants: tuple = ("original",)
@@ -31,6 +39,7 @@ class BuildOptions:
     background_removal: str | None = None
     background_mode: str = "edge"
     tolerance: int = 0
+    feather: int = 0
 
 
 def _write_json(path, value):
@@ -101,7 +110,7 @@ def generate_kit(source, image, vector, slug, work, options, notes):
     masters.mkdir()
     shutil.copy2(source, masters / ("source" + source.suffix.lower()))
     images = {variant: make_variant(image, variant) for variant in options.variants}
-    exports = []
+    exports, details, warnings = [], {}, []
     for name, variant_image in images.items():
         variant_dir = folder / name
         variant_dir.mkdir()
@@ -114,7 +123,14 @@ def generate_kit(source, image, vector, slug, work, options, notes):
                     fitted.save(path, format="WEBP", lossless=True, exact=True)
                 else:
                     fitted.save(path, format="PNG", optimize=True)
-                exports.append(path.relative_to(folder).as_posix())
+                relative = path.relative_to(folder).as_posix()
+                exports.append(relative)
+                details[relative] = {"width": preset.width, "height": preset.height, "variant": name,
+                                     "preset": preset.name, "purpose": preset.purpose}
+                size = path.stat().st_size
+                if preset.max_kb is not None and size > preset.max_kb * 1024:
+                    warnings.append(f"{relative} is {size / 1024:.1f} KB, over the {preset.max_kb} KB "
+                                    f"cap for {preset.name}.")
         if options.icons:
             background = options.icon_background or ((32, 32, 32, 255) if name == "white" else (255, 255, 255, 255))
             write_icons(variant_image, variant_dir / "app-icons", options.padding,
@@ -165,13 +181,15 @@ their respective owners; the software license grants no artwork rights.
         "variants": list(options.variants), "formats": list(options.formats), "padding": options.padding,
         "upscale_raster": options.upscale, "background_removal": options.background_removal,
         "background_mode": options.background_mode, "tolerance": options.tolerance,
-        "notes": notes, "files": [],
+        "feather": options.feather, "notes": notes, "warnings": warnings, "files": [],
     }
     for path in sorted(folder.rglob("*")):
         if path.is_file():
-            metadata["files"].append({"path": path.relative_to(folder).as_posix(),
-                                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                                      "bytes": path.stat().st_size})
+            relative = path.relative_to(folder).as_posix()
+            entry = {"path": relative, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                     "bytes": path.stat().st_size}
+            entry.update(details.get(relative, {}))
+            metadata["files"].append(entry)
     _write_json(folder / "kit.json", metadata)
     archive = None
     if options.archive:
@@ -180,7 +198,7 @@ their respective owners; the software license grants no artwork rights.
             for path in sorted(folder.rglob("*")):
                 if path.is_file():
                     bundle.write(path, path.relative_to(work).as_posix())
-    return folder, archive
+    return KitResult(folder, archive, metadata, warnings)
 
 
 def publish_kit(folder, archive, output_root, overwrite=False):

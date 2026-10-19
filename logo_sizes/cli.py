@@ -8,7 +8,8 @@ import sys
 import tempfile
 
 from . import __version__
-from .imaging import SOURCE_EXTENSIONS, load_image, opaque_color, remove_background
+from .imaging import SOURCE_EXTENSIONS, detect_background, load_image, opaque_color, remove_background
+from .report import print_file_table
 from .kit import BuildOptions, generate_kit, publish_kit
 from .presets import GROUPS, PRESETS, VARIANTS, parse_size, slugify
 
@@ -47,9 +48,10 @@ def parser_for_cli():
     parser.add_argument("--formats", nargs="+", choices=("png", "webp"), default=["png"])
     parser.add_argument("--padding", type=float, default=0.08, help="Fraction per side, 0 to below 0.5; default 0.08.")
     parser.add_argument("--no-upscale", action="store_true", help="Keep raster art at or below its source pixel dimensions.")
-    parser.add_argument("--remove-background", metavar="COLOR", help="Explicit background color, such as '#ffffff'.")
+    parser.add_argument("--remove-background", metavar="COLOR", help="Explicit background color, such as '#ffffff', or 'auto' to measure the border.")
     parser.add_argument("--background-mode", choices=("edge", "all"), default="edge")
     parser.add_argument("--tolerance", type=int, default=0, help="Background matching tolerance, 0 to 255.")
+    parser.add_argument("--feather", type=int, default=0, help="Soft-edge ramp width above the tolerance, 0 to 255; 0 is a hard cut.")
     parser.add_argument("--icon-background", metavar="COLOR", help="Opaque app icon background; default dark for white variants, white otherwise.")
     parser.add_argument("--no-icons", action="store_true")
     parser.add_argument("--no-preview", action="store_true")
@@ -64,10 +66,10 @@ def parser_for_cli():
 def select_options(args):
     if not math.isfinite(args.padding) or not 0 <= args.padding < 0.5:
         raise ValueError("Padding must be a finite fraction from 0 to below 0.5.")
-    if not 0 <= args.tolerance <= 255:
-        raise ValueError("Tolerance must be 0 to 255.")
-    if not args.remove_background and (args.tolerance or args.background_mode != "edge"):
-        raise ValueError("Background mode and tolerance require --remove-background COLOR.")
+    if not 0 <= args.tolerance <= 255 or not 0 <= args.feather <= 255:
+        raise ValueError("Tolerance and feather must be 0 to 255.")
+    if not args.remove_background and (args.tolerance or args.feather or args.background_mode != "edge"):
+        raise ValueError("Background mode, tolerance and feather require --remove-background COLOR.")
     presets = list(PRESETS)
     if args.group:
         presets = [p for p in presets if p.group == args.group]
@@ -83,11 +85,31 @@ def select_options(args):
         raise ValueError("Each selected size must have a different name.")
     variants = VARIANTS if "all" in args.variants else tuple(dict.fromkeys(args.variants))
     icon_color = opaque_color(args.icon_background) if args.icon_background else None
-    if args.remove_background:
+    if args.remove_background and args.remove_background.lower() != "auto":
         opaque_color(args.remove_background)
     return BuildOptions(tuple(presets), variants, tuple(dict.fromkeys(args.formats)), args.padding,
                         not args.no_upscale, not args.no_icons, not args.no_preview, not args.no_zip,
-                        icon_color, args.remove_background, args.background_mode, args.tolerance)
+                        icon_color, args.remove_background, args.background_mode, args.tolerance,
+                        args.feather)
+
+
+def matte_source(image, options, notes):
+    """Apply explicit or measured background removal and record what was used."""
+    if not options.background_removal:
+        return image
+    if options.background_removal.lower() == "auto":
+        detected = detect_background(image)
+        color = detected.color
+        tolerance = options.tolerance or detected.tolerance
+        feather = options.feather or detected.feather
+        notes.append("Background auto: color #%02x%02x%02x, border noise +/-%d, tolerance %d, feather %d."
+                     % (*color, detected.noise, tolerance, feather))
+    else:
+        color = opaque_color(options.background_removal)
+        tolerance, feather = options.tolerance, options.feather
+    options.background_removal = "#%02x%02x%02x" % tuple(color[:3])
+    options.tolerance, options.feather = tolerance, feather
+    return remove_background(image, color, tolerance, options.background_mode, feather)
 
 
 def source_plan(args):
@@ -142,8 +164,7 @@ def main(argv=None):
                 try:
                     render_size = max(512, *(max(p.width, p.height) for p in options.presets))
                     image, vector, notes = load_image(source, render_size)
-                    if args.remove_background:
-                        image = remove_background(image, opaque_color(args.remove_background), args.tolerance, args.background_mode)
+                    image = matte_source(image, options, notes)
                     if not vector and options.upscale:
                         if any(min(p.width * (1 - 2 * options.padding) / image.width,
                                    p.height * (1 - 2 * options.padding) / image.height) > 1 for p in options.presets):
@@ -151,12 +172,15 @@ def main(argv=None):
                     if image.getchannel("A").getextrema()[0] == 255:
                         notes.append("The source has a solid background. Converting to PNG does not remove it.")
                     with tempfile.TemporaryDirectory(prefix=".logo-build-", dir=args.output_dir) as temporary:
-                        folder, archive = generate_kit(source, image, vector, slug, Path(temporary), options, notes)
-                        backup = publish_kit(folder, archive, args.output_dir, args.overwrite)
+                        kit = generate_kit(source, image, vector, slug, Path(temporary), options, notes)
+                        backup = publish_kit(kit.folder, kit.archive, args.output_dir, args.overwrite)
                     done += 1
                     print(f"DONE: {slug} -> {args.output_dir / slug}")
                     if backup:
                         print(f"  Previous kit kept at: {backup}")
+                    print_file_table(kit.manifest["files"])
+                    for warning in kit.warnings:
+                        print(f"  WARNING: {warning}")
                     for note in notes:
                         print(f"  NOTE: {note}")
                 except Exception as exc:

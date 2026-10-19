@@ -1,11 +1,12 @@
 """Image preparation, alpha-safe variants and optional local SVG rendering."""
 
+from dataclasses import dataclass
 from io import BytesIO
 import math
 import re
 import warnings
 
-from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageOps
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFilter, ImageMath, ImageOps
 
 from .presets import MAX_PIXELS
 
@@ -94,23 +95,163 @@ def load_image(path, render_size=2048):
     return image, vector, notes
 
 
-def remove_background(image, color, tolerance=0, mode="edge"):
-    difference = ImageChops.difference(image.convert("RGB"), Image.new("RGB", image.size, color[:3]))
-    red, green, blue = difference.split()
-    distance = ImageChops.lighter(ImageChops.lighter(red, green), blue)
-    matching = distance.point(lambda v: 255 if v <= tolerance else 0)
+def _rgb(value):
+    if isinstance(value, str):
+        return ImageColor.getcolor(value, "RGB")
+    return tuple(int(v) for v in value[:3])
+
+
+def _distance_to_color(image, color):
+    """Largest per-channel difference between each pixel and a flat color, 0 to 255."""
+    flat = Image.new("RGB", image.size, _rgb(color))
+    red, green, blue = ImageChops.difference(image.convert("RGB"), flat).split()
+    return ImageChops.lighter(ImageChops.lighter(red, green), blue)
+
+
+def _ramp(distance, inner, feather):
+    """255 where a pixel fully matches, 0 where it clearly does not, linear in between."""
+    if feather <= 0:
+        return distance.point(lambda v: 255 if v <= inner else 0)
+    table = [255 if v <= inner else 0 if v >= inner + feather
+             else round(255 * (1 - (v - inner) / feather)) for v in range(256)]
+    return distance.point(table)
+
+
+def _connected_to_border(mask):
+    """Pixels of a 0/255 mask that touch the border through other mask pixels."""
+    connected = ImageOps.expand(mask, border=1, fill=255)
+    ImageDraw.floodfill(connected, (0, 0), 128)
+    connected = connected.crop((1, 1, mask.width + 1, mask.height + 1))
+    return connected.point(lambda v: 255 if v == 128 else 0)
+
+
+def _decontaminate(image, color, keep):
+    """Remove the background color's contribution from partially kept edge pixels."""
+    background = _rgb(color)
+    channels = []
+    for channel, flat in zip(image.convert("RGB").split(), background):
+        cleaned = ImageMath.lambda_eval(
+            lambda a, flat=flat: a["convert"](
+                a["max"](a["min"]((a["c"] * 255 - flat * (255 - a["k"])) / a["max"](a["k"], 1), 255), 0), "L"),
+            c=channel.convert("F"), k=keep.convert("F"))
+        channels.append(cleaned)
+    cleaned = Image.merge("RGB", channels)
+    # Fully removed pixels keep their original color; only partial pixels change.
+    partial = keep.point(lambda v: 255 if v else 0)
+    return Image.composite(cleaned, image.convert("RGB"), partial)
+
+
+def remove_background(image, color, tolerance=0, mode="edge", feather=0):
+    """Make a flat background color transparent.
+
+    Pixels within ``tolerance`` of the color are removed. With ``feather`` above
+    zero the alpha ramps over the next ``feather`` levels of difference and the
+    background color is subtracted from those edge pixels, so anti-aliased edges
+    carry no halo onto a dark surface. ``edge`` mode only removes regions that
+    touch the image border; ``all`` removes every matching pixel.
+    """
+    distance = _distance_to_color(image, color)
+    amount = _ramp(distance, tolerance, feather)
     if mode == "edge":
-        connected = ImageOps.expand(matching, border=1, fill=255)
-        ImageDraw.floodfill(connected, (0, 0), 128)
-        connected = connected.crop((1, 1, image.width + 1, image.height + 1))
-        keep = connected.point(lambda v: 0 if v == 128 else 255)
+        core = amount.point(lambda v: 255 if v >= 128 else 0)
+        region = _connected_to_border(core)
+        if feather > 0:
+            # Anti-aliased edges extend a few pixels past the mostly-background core.
+            region = region.filter(ImageFilter.MaxFilter(7))
+        amount = ImageChops.multiply(amount, region)
+    keep = ImageChops.invert(amount)
+    if feather > 0:
+        result = _decontaminate(image, color, keep).convert("RGBA")
     else:
-        keep = ImageOps.invert(matching)
-    result = image.copy()
+        result = image.copy()
     result.putalpha(ImageChops.multiply(image.getchannel("A"), keep))
     if result.getchannel("A").getbbox() is None:
         raise ValueError("Background removal removed all artwork. Check the chosen color and tolerance.")
     return result
+
+
+@dataclass(frozen=True)
+class DetectedBackground:
+    color: tuple
+    tolerance: int
+    feather: int
+    noise: int
+
+
+def _percentile(histogram, fraction):
+    total = sum(histogram)
+    if not total:
+        return 0
+    running = 0
+    for value, count in enumerate(histogram):
+        running += count
+        if running >= total * fraction:
+            return value
+    return len(histogram) - 1
+
+
+def detect_background(image, ring=2):
+    """Measure the border color and its noise, and derive matting settings from them."""
+    rgba = image.convert("RGBA")
+    width, height = rgba.size
+    if min(width, height) <= ring * 2:
+        raise ValueError("The image is too small to sample a border.")
+    inner = Image.new("L", (width - 2 * ring, height - 2 * ring), 0)
+    border = Image.new("L", rgba.size, 255)
+    border.paste(inner, (ring, ring))
+    translucent = rgba.getchannel("A").point(lambda v: 255 if v < 255 else 0)
+    if ImageChops.multiply(border, translucent).getbbox():
+        raise ValueError("The border is already transparent; there is no flat background to detect.")
+    samples = [pixel[:3] for pixel, flag in zip(rgba.getdata(), border.getdata()) if flag]
+    color = tuple(sorted(channel)[len(samples) // 2] for channel in zip(*samples))
+    deviations = sorted(abs(c - m) for pixel in samples for c, m in zip(pixel, color))
+    noise = deviations[min(len(deviations) - 1, int(len(deviations) * 0.99))]
+    tolerance = min(64, noise + 2)
+    distance = _distance_to_color(rgba, color)
+    histogram = distance.histogram()
+    art = [0] * (tolerance + 9) + histogram[tolerance + 9:]
+    if not sum(art):
+        raise ValueError("No artwork differs from the border color; nothing would remain.")
+    contrast = _percentile(art, 0.2)
+    feather = max(8, min(200, contrast - tolerance))
+    return DetectedBackground(color, tolerance, feather, noise)
+
+
+def color_map(image, entries):
+    """Recolor or clear chosen colors.
+
+    Each entry has ``from`` (a color), ``to`` (a color, or None for transparent),
+    an optional ``tolerance`` and an optional ``feather`` ramp. Matching uses the
+    source colors, so entries never see each other's results.
+    """
+    rgba = image.convert("RGBA")
+    amounts = []
+    for entry in entries:
+        distance = _distance_to_color(rgba, entry["from"])
+        amount = _ramp(distance, int(entry.get("tolerance", 0)), int(entry.get("feather", 0)))
+        amounts.append((entry, amount))
+    rgb = rgba.convert("RGB")
+    alpha = rgba.getchannel("A")
+    for entry, amount in amounts:
+        target = entry.get("to")
+        if target is None or (isinstance(target, str) and target.lower() == "transparent"):
+            alpha = ImageChops.multiply(alpha, ImageChops.invert(amount))
+        else:
+            rgb = Image.composite(Image.new("RGB", rgb.size, _rgb(target)), rgb, amount)
+    result = rgb.convert("RGBA")
+    result.putalpha(alpha)
+    if result.getchannel("A").getbbox() is None:
+        raise ValueError("The color map removed all artwork.")
+    return result
+
+
+def trim_to_art(image, threshold=0):
+    """Crop to the pixels whose alpha exceeds the threshold; returns (image, box)."""
+    mask = image.getchannel("A").point(lambda v: 255 if v > threshold else 0)
+    box = mask.getbbox()
+    if box is None:
+        raise ValueError("No artwork above the trim threshold.")
+    return image.crop(box), box
 
 
 def make_variant(image, name):

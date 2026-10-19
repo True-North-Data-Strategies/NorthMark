@@ -15,6 +15,7 @@ class Preset:
     height: int
     group: str
     purpose: str
+    max_kb: int | None = None
 
 
 PRESETS = (

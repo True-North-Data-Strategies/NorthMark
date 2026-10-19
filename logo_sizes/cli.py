@@ -33,12 +33,20 @@ def process_alive(pid):
         return False
     if sys.platform == "win32":
         import ctypes
+        from ctypes import wintypes
         kernel32 = ctypes.windll.kernel32
         handle = kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
-        if handle:
-            kernel32.CloseHandle(handle)
+        if not handle:
+            return kernel32.GetLastError() == 5              # ERROR_ACCESS_DENIED: it exists, we may not query it
+        try:
+            # An exited process can still be opened while something holds its handle;
+            # only STILL_ACTIVE (259) means it is running.
+            code = wintypes.DWORD()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return code.value == 259
             return True
-        return kernel32.GetLastError() == 5                  # ERROR_ACCESS_DENIED: it exists, we may not query it
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

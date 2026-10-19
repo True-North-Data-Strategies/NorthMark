@@ -40,30 +40,30 @@ def main():
                 size = int(subprocess.run(["git", "cat-file", "-s", ":" + path.as_posix()], cwd=ROOT,
                                           capture_output=True, check=True, text=True).stdout)
             except (ValueError, OSError, subprocess.CalledProcessError):
-                failures.append(f"README demo image is unreadable: {path}")
+                failures.append(f"README demo image is unreadable: {path.as_posix()}")
                 continue
             if size > DEMO_IMAGE_MAX_BYTES:
-                failures.append(f"README demo image is over {DEMO_IMAGE_MAX_BYTES:,} bytes: {path}")
+                failures.append(f"README demo image is over {DEMO_IMAGE_MAX_BYTES:,} bytes: {path.as_posix()}")
             else:
                 demo_images.append(path)
             continue
         if path.parts[0] in PRIVATE_FOLDERS or path.suffix.lower() in ARTWORK or path.name.startswith(".env"):
-            failures.append(f"Private or generated file is tracked: {path}")
+            failures.append(f"Private or generated file is tracked: {path.as_posix()}")
             continue
         try:
             staged = subprocess.run(["git", "show", ":" + path.as_posix()], cwd=ROOT,
                                     capture_output=True, check=True)
             content = staged.stdout.decode("utf-8")
         except (UnicodeError, OSError, subprocess.CalledProcessError):
-            failures.append(f"Tracked file is unreadable or binary: {path}")
+            failures.append(f"Tracked file is unreadable or binary: {path.as_posix()}")
             continue
         if SECRET.search(content):
-            failures.append(f"Possible credential in tracked file: {path}")
+            failures.append(f"Possible credential in tracked file: {path.as_posix()}")
         if terms and path.suffix.lower() in CONFIG_EXTENSIONS:
             lowered = content.lower()
             if any(term in lowered for term in terms):
                 # Never echo the term itself; the list is private.
-                failures.append(f"Tracked configuration mentions a private term: {path}")
+                failures.append(f"Tracked configuration mentions a private term: {path.as_posix()}")
     for failure in failures:
         print(failure, file=sys.stderr)
     if not paths:

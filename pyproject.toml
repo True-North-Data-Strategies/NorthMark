@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "create-logos-all-sizes"
-version = "3.0.0"
+version = "4.0.0"
 description = "Safe logo resizing, transparent color variants, previews and portable brand kits."
 readme = "README.md"
 requires-python = ">=3.10"

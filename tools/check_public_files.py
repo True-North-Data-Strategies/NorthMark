@@ -15,11 +15,24 @@ DEMO_IMAGE_FOLDER = ("docs", "images")
 DEMO_IMAGE_EXTENSIONS = {".png"}
 DEMO_IMAGE_MAX_BYTES = 500_000
 SECRET = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})")
+# Tracked configuration files must not mention names listed in this ignored, never-committed file.
+PRIVATE_TERMS_FILE = ROOT / "local-assets" / "private-terms.txt"
+CONFIG_EXTENSIONS = {".yaml", ".yml", ".csv"}
+
+
+def load_private_terms():
+    """Lowercased terms from local-assets/private-terms.txt, or None when the file is absent."""
+    try:
+        lines = PRIVATE_TERMS_FILE.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return None
+    return [line.strip().lower() for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
 
 def main():
     result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True)
     paths = [Path(name.decode("utf-8")) for name in result.stdout.split(b"\0") if name]
+    terms = load_private_terms()
     failures, demo_images = [], []
     for path in paths:
         if path.parts[:-1] == DEMO_IMAGE_FOLDER and path.suffix.lower() in DEMO_IMAGE_EXTENSIONS:
@@ -46,6 +59,11 @@ def main():
             continue
         if SECRET.search(content):
             failures.append(f"Possible credential in tracked file: {path}")
+        if terms and path.suffix.lower() in CONFIG_EXTENSIONS:
+            lowered = content.lower()
+            if any(term in lowered for term in terms):
+                # Never echo the term itself; the list is private.
+                failures.append(f"Tracked configuration mentions a private term: {path}")
     for failure in failures:
         print(failure, file=sys.stderr)
     if not paths:
@@ -55,6 +73,10 @@ def main():
         return 1
     for image in demo_images:
         print(f"README demo image: {image.as_posix()}")
+    if terms is None:
+        print("private-terms: no local-assets/private-terms.txt found; add one to screen tracked YAML and CSV for private names.")
+    else:
+        print(f"private-terms: {len(terms)} term(s) checked against tracked YAML and CSV files.")
     print(f"PASS: {len(paths) - len(demo_images)} tracked text files and {len(demo_images)} README demo image(s); "
           "no other artwork, private folders or obvious credentials.")
     return 0

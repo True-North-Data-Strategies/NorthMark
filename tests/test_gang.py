@@ -164,7 +164,6 @@ class GangCliTests(unittest.TestCase):
         result = self.run_gang("job.yaml")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         folder = self.outputs / "gang-sheets" / "tiny"
-        sheet = folder / "sheet-22x6.png"
         pngs = sorted(folder.glob("sheet-*.png"))
         self.assertEqual(len(pngs), 1, result.stdout)
         self.assertEqual(pngs[0].name, "sheet-4x6.png")

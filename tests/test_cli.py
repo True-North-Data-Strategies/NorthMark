@@ -1,10 +1,11 @@
 """End-to-end checks with generated artwork, never private brand assets."""
 
 import hashlib
-import importlib.util
 import json
+import os
 from pathlib import Path
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,11 @@ from PIL import Image, ImageDraw
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "make_logo_sizes.py"
+try:
+    import cairosvg  # noqa: F401
+    HAS_SVG = True
+except (ImportError, OSError):
+    HAS_SVG = False
 SMALL = ("--size", "sample=20x20", "--padding", "0", "--no-icons",
          "--no-preview", "--no-zip")
 
@@ -259,7 +265,7 @@ class LogoToolTests(CliTestCase):
             with Image.open(self.outputs / "demo" / "original" / f"{name}.png") as out:
                 self.assertEqual(out.size, (size, size))
 
-    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
     def test_vector_source_is_rendered_and_original_is_preserved(self):
         self.source = self.inputs / "vector.svg"
         svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50" fill="red"/></svg>'
@@ -271,7 +277,7 @@ class LogoToolTests(CliTestCase):
             self.assertEqual(out.getpixel((0, 0)), (255, 0, 0, 255))
         self.assertTrue(json.loads((kit / "kit.json").read_text())["vector_source"])
 
-    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
     def test_svg_external_resources_and_entities_are_refused(self):
         self.source = self.inputs / "unsafe.svg"
         for content in [
@@ -465,7 +471,7 @@ class DigitalKitCoverageTests(CliTestCase):
         with Image.open(self.outputs / "demo" / "preview.png") as out:
             self.assertEqual(out.size[0], 360 * 4)
 
-    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
     def test_svg_source_gets_favicon_passthrough_and_vector_print_pdf(self):
         self.source = self.inputs / "vector.svg"
         svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><style>.a{fill:#ff0000}</style>'
@@ -479,7 +485,7 @@ class DigitalKitCoverageTests(CliTestCase):
         self.assertIn('rel="icon" type="image/svg+xml" href="/favicon.svg"', (kit / "web" / "head.html").read_text())
         self.assertEqual((kit / "print" / "vector.pdf").read_bytes()[:4], b"%PDF")
 
-    @unittest.skipUnless(importlib.util.find_spec("cairosvg"), "install .[svg] for SVG checks")
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
     def test_svg_style_blocks_with_imports_or_urls_are_still_refused(self):
         self.source = self.inputs / "styled.svg"
         for css in ("@import url(x.css);", ".a{fill:url(http://example.com/a.png)}", ".a{fill:red}/*c*/"):
@@ -488,3 +494,37 @@ class DigitalKitCoverageTests(CliTestCase):
                                        '<rect class="a" width="20" height="20"/></svg>')
                 self.assertNotEqual(self.run_tool(*SMALL).returncode, 0)
                 self.assertFalse((self.outputs / "styled").exists())
+
+
+class LockFileTests(CliTestCase):
+    """The output lock names its process and host, and clears itself only when that process is gone."""
+
+    def test_lock_records_pid_and_host_and_is_removed_after_the_run(self):
+        self.outputs.mkdir()
+        lock = self.outputs / ".logo-kit.lock"
+        result = self.success(*SMALL)
+        self.assertFalse(lock.exists(), result.stdout)
+
+    def test_stale_lock_from_a_dead_process_on_this_host_is_cleared(self):
+        self.outputs.mkdir()
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait()
+        (self.outputs / ".logo-kit.lock").write_text(f"pid: {dead.pid}\nhost: {socket.gethostname()}\n", encoding="utf-8")
+        result = self.success(*SMALL)
+        self.assertIn("stale lock", (result.stdout + result.stderr).lower())
+        self.assertTrue((self.outputs / "demo" / "original" / "sample.png").is_file())
+
+    def test_lock_held_by_a_live_process_is_respected(self):
+        self.outputs.mkdir()
+        (self.outputs / ".logo-kit.lock").write_text(f"pid: {os.getpid()}\nhost: {socket.gethostname()}\n", encoding="utf-8")
+        result = self.run_tool(*SMALL)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(".logo-kit.lock", result.stdout + result.stderr)
+        self.assertFalse((self.outputs / "demo").exists())
+
+    def test_lock_from_another_host_is_respected(self):
+        self.outputs.mkdir()
+        (self.outputs / ".logo-kit.lock").write_text("pid: 1\nhost: some-other-machine\n", encoding="utf-8")
+        result = self.run_tool(*SMALL)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.outputs / "demo").exists())

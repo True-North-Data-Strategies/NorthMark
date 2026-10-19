@@ -2,13 +2,16 @@
 
 import argparse
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import math
+import os
 from pathlib import Path
+import socket
 import sys
 import tempfile
 
 from . import __version__
-from .config import ConfigError, load_brand
+from .config import load_brand
 from .imaging import (SOURCE_EXTENSIONS, detect_background, load_image, opaque_color, remove_background,
                       trim_to_art)
 from .dtf import (DtfRequest, UVDTF, build_dtf, garment_colors, load_order, load_placements, pixels_for,
@@ -24,17 +27,58 @@ PROJECT_ROOT = PACKAGE_ROOT if (PACKAGE_ROOT / "make_logo_sizes.py").is_file() e
 COMMANDS = ("kit", "dtf", "gang")
 
 
+def process_alive(pid):
+    """True when a process with this id exists on this machine. Never signals or terminates anything."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+        return kernel32.GetLastError() == 5                  # ERROR_ACCESS_DENIED: it exists, we may not query it
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def stale_lock_owner(lock):
+    """The pid recorded in a lock file when that process has exited on this host, else None."""
+    try:
+        fields = dict(line.split(":", 1) for line in lock.read_text(encoding="utf-8").splitlines() if ":" in line)
+    except (OSError, UnicodeError):
+        return None
+    pid, host = fields.get("pid", "").strip(), fields.get("host", "").strip()
+    if not pid.isdigit() or host != socket.gethostname() or int(pid) == os.getpid():
+        return None
+    return None if process_alive(int(pid)) else int(pid)
+
+
 @contextmanager
 def output_lock(root):
     root.mkdir(parents=True, exist_ok=True)
     lock = root / ".logo-kit.lock"
-    try:
-        handle = lock.open("x", encoding="utf-8")
-    except FileExistsError as exc:
-        raise ValueError("Another export holds .logo-kit.lock. If it was interrupted, check that it has stopped before removing the lock.") from exc
+    handle = None
+    for attempt in range(2):
+        try:
+            handle = lock.open("x", encoding="utf-8")
+            break
+        except FileExistsError as exc:
+            owner = stale_lock_owner(lock) if attempt == 0 else None
+            if owner is None:
+                raise ValueError("Another export holds .logo-kit.lock. If it was interrupted, check that it has stopped before removing the lock.") from exc
+            print(f"Removed a stale lock left by process {owner}, which is no longer running on this host.")
+            lock.unlink()
     try:
         with handle:
-            handle.write("Logo export in progress.\n")
+            handle.write(f"pid: {os.getpid()}\nhost: {socket.gethostname()}\n"
+                         f"started: {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n")
         yield
     finally:
         lock.unlink()

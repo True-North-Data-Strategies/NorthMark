@@ -82,3 +82,39 @@ class PublicFileChecks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(shutil.which("git"), "git is needed to check public-file protection")
+class PrivateTermTests(PublicFileChecks):
+    """Tracked YAML and CSV must not mention terms listed in the ignored private-terms file."""
+
+    def test_private_terms_in_tracked_yaml_or_csv_are_refused(self):
+        (self.root / "local-assets").mkdir()
+        (self.root / "local-assets" / "private-terms.txt").write_text("SecretBrand\n# comment\n\nNT-0000000\n")
+        (self.root / "examples").mkdir()
+        (self.root / "examples" / "brand.yaml").write_text("brand: secretbrand co\n")
+        self.git("add", "examples/brand.yaml")
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("examples/brand.yaml", result.stderr)
+        self.assertNotIn("SecretBrand", result.stderr + result.stdout)
+        (self.root / "examples" / "brand.yaml").write_text("brand: example co\n")
+        (self.root / "examples" / "orders.csv").write_text("order,qty\nNT-0000000,2\n")
+        self.git("add", "examples/brand.yaml", "examples/orders.csv")
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("examples/orders.csv", result.stderr)
+
+    def test_without_a_terms_file_yaml_passes_and_the_check_says_so(self):
+        (self.root / "settings.yaml").write_text("brand: example co\n")
+        self.git("add", "settings.yaml")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("private-terms", result.stdout)
+
+    def test_private_terms_only_apply_to_yaml_and_csv(self):
+        (self.root / "local-assets").mkdir()
+        (self.root / "local-assets" / "private-terms.txt").write_text("SecretBrand\n")
+        (self.root / "notes.md").write_text("SecretBrand appears in prose documentation.\n")
+        self.git("add", "notes.md")
+        self.assertEqual(self.check().returncode, 0)

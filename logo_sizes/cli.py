@@ -129,7 +129,7 @@ def add_common_arguments(parser):
 
 
 def parser_for_cli():
-    parser = argparse.ArgumentParser(prog="logo-sizes", description="Create safe logo sizes, color variants, previews and shareable brand kits.")
+    parser = argparse.ArgumentParser(prog="northmark", description="Create safe logo sizes, color variants, previews and shareable brand kits.")
     parser.add_argument("source", nargs="?", type=Path, help="One image; omit to process the input folder.")
     parser.add_argument("-i", "--input-dir", type=Path, default=PROJECT_ROOT / "local-assets" / "input")
     parser.add_argument("--brand", type=Path, metavar="BRAND.yaml", help="Brand configuration; supplies sources, sizes, variants and colors.")
@@ -372,7 +372,7 @@ def background_from_args(args):
 
 
 def parser_for_dtf():
-    parser = argparse.ArgumentParser(prog="logo-sizes dtf", description="Make 300 DPI DTF transfer files at exact placement sizes, with garment mockups, an order sheet and a press card.")
+    parser = argparse.ArgumentParser(prog="northmark dtf", description="Make 300 DPI DTF transfer files at exact placement sizes, with garment mockups, an order sheet and a press card.")
     parser.add_argument("source", nargs="?", type=Path, help="One image, or use --brand.")
     parser.add_argument("--brand", type=Path, metavar="BRAND.yaml", help="Brand configuration with sources, maps and a dtf section.")
     parser.add_argument("--placement", action="append", default=[], metavar="NAME",
@@ -510,7 +510,7 @@ def run_dtf(argv):
 
 
 def parser_for_gang():
-    parser = argparse.ArgumentParser(prog="logo-sizes gang", description="Pack transfers onto wide gang sheets and write the sheet files, layout, cut list and preview.")
+    parser = argparse.ArgumentParser(prog="northmark gang", description="Pack transfers onto wide gang sheets and write the sheet files, layout, cut list and preview.")
     parser.add_argument("job", type=Path, help="Job file (YAML or CSV) listing designs or files, sizes and quantities.")
     parser.add_argument("--no-rotate", action="store_true", help="Never rotate transfers, even if the job file allows it.")
     parser.add_argument("--no-pdf", action="store_true", help="Skip the PDF sheets.")

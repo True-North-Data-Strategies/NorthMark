@@ -1,11 +1,11 @@
 <!-- TNDS-HEADER:BEGIN -->
 <div align="center">
-  <h1>Create Logos All Sizes</h1>
+  <h1>NorthMark</h1>
   <h3>One clean master in, a digital kit and print-ready transfers out.</h3>
   <img src="https://raw.githubusercontent.com/Jjohnston70/Jjohnston70/main/true-north-logo-layered-v3.png" alt="True North Data Strategies" width="240" />
   <br /><br />
   <a href="#stack"><img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20Pillow-0A8EA0?style=for-the-badge" alt="Built with Python | Pillow" /></a>
-  <a href="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://github.com/True-North-Data-Strategies/NorthMark/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/NorthMark/actions/workflows/tests.yml/badge.svg" alt="CI status" /></a>
   <a href="#contact"><img src="https://img.shields.io/badge/Contact-TNDS-181717?style=for-the-badge" alt="Contact" /></a>
 </div>
 <!-- TNDS-HEADER:END -->
@@ -21,7 +21,7 @@
 
 ## What this is
 
-Turn source artwork into correctly proportioned PNGs, lossless WebP, color variants,
+NorthMark (formerly Create Logos All Sizes) turns source artwork into correctly proportioned PNGs, lossless WebP, color variants,
 browser and app icons, a web drop-in folder, previews and a ZIP you can hand to someone
 else. Then take the same master to print: 300 DPI direct-to-film (DTF) transfer files at
 exact placement sizes, garment mockups, an order sheet, a press card, and gang sheets
@@ -153,7 +153,7 @@ writes both PNG and PDF and tells you to confirm with the vendor before the firs
 ## Keep your artwork private
 
 ```text
-create-logos-all-sizes/
+NorthMark/
   make_logo_sizes.py       command you run
   logo_sizes/              public program code and vendor data files
   tests/                   tests generate their own temporary artwork

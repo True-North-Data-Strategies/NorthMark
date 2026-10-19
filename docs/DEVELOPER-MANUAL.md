@@ -1,6 +1,6 @@
-# Create Logos All Sizes: Developer Manual
+# NorthMark: Developer Manual
 
-How the code is organized, what each module guarantees, how outputs are published
+How NorthMark's code is organized, what each module guarantees, how outputs are published
 safely, how to test and release, and the security rules a public image tool has to
 keep. Read the user manual first for what the commands do.
 
@@ -20,7 +20,7 @@ keep. Read the user manual first for what the commands do.
 
 | Module | Responsibility |
 | --- | --- |
-| `logo_sizes/cli.py` | Argument parsing for `kit`, `dtf` and `gang`; source planning; the output lock; all printing. Nothing else prints |
+| `logo_sizes/cli.py` | Argument parsing for `kit`, `dtf` and `gang` (installed as `northmark` and `logo-sizes`); source planning; the output lock; all printing. Nothing else prints |
 | `logo_sizes/config.py` | Brand YAML loading with `yaml.safe_load`, key-by-key validation, color resolution, preset selection |
 | `logo_sizes/presets.py` | `Preset` dataclass and the preset list loaded from `data/platform-presets.yaml`; `parse_size`, `slugify` |
 | `logo_sizes/imaging.py` | Loading with limits, the SVG sanitizer, matting (`remove_background`, `detect_background`), `color_map`, `trim_to_art`, `make_variant`, `fit_canvas`, `svg_to_pdf` |

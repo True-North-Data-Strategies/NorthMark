@@ -1,9 +1,10 @@
-# Create Logos All Sizes: User Manual
+# NorthMark: User Manual
 
-This manual covers every command, flag, file format and output of version 4. The
-README is the short tour; this is the reference. All examples use the wrapper
-`python make_logo_sizes.py`; the installed `logo-sizes` command and
-`python -m logo_sizes` accept exactly the same arguments.
+This manual covers every command, flag, file format and output of NorthMark version 4
+(the project was called Create Logos All Sizes through version 3). The README is the
+short tour; this is the reference. All examples use the wrapper
+`python make_logo_sizes.py`; the installed `northmark` command, its `logo-sizes` alias
+and `python -m logo_sizes` accept exactly the same arguments.
 
 ## Contents
 

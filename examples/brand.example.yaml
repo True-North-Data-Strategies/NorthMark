@@ -1,4 +1,4 @@
-# Example brand configuration for Create Logos All Sizes.
+# Example brand configuration for NorthMark.
 # Copy this file to local-assets/brands/<your-brand>.yaml (git ignores that
 # folder) and point the sources at your own artwork. Every value here is a
 # generic placeholder; no real brand data ships with the repository.

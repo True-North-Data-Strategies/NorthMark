@@ -142,13 +142,20 @@ design, placement and variant pick up the matching DTF output automatically.
 | `cut-list.csv` | One row per placed copy, with a matching template in `examples/templates/` |
 | `preview.png` | Downscaled sheets with labeled boxes |
 
-Packing is deterministic shelf packing on the configured width, with a 0.25 inch gap and
-margin by default and 90 degree rotation allowed. The tool picks the shortest configured
-standard length that fits, or splits across sheets, and prints the utilization. Files
-over the 50 MB upload ceiling get a warning. Enter the vendor's current prices in the job
-file and the summary compares cost per transfer for gang sheets against by-size orders
-with the bulk tiers. Two vendor statements conflict on gang-sheet formats, so the tool
-writes both PNG and PDF and tells you to confirm with the vendor before the first upload.
+Packing is deterministic shelf packing on the configured width, with a 0.25 inch gap
+(the lowest published industry minimum) and a 0.5 inch edge margin (a conservative
+default; 0.25 is the published minimum) and 90 degree rotation allowed. The tool picks
+the shortest configured standard length that fits, or splits across sheets, and prints
+the utilization. Files over the 50 MB upload ceiling get a warning. Enter the vendor's
+current prices in the job file and the summary compares cost per transfer for gang
+sheets against by-size orders with the bulk tiers.
+
+Ninja Transfers accepts an uploaded gang sheet only when it is fully vector. The sheet
+PNG and PDF this tool writes are raster, so for Ninja the workflow is: upload the 300 DPI
+transfer PNGs from each design's `dtf/` folder into Ninja's online gang sheet builder and
+reproduce the layout from `layout.json`, or let Auto Build place them. The rendered sheet
+is your cut plan, and the file to send to printers that accept raster sheets. The run
+summary prints this rule, with the dates the sources were read.
 
 ## Keep your artwork private
 

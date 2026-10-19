@@ -107,11 +107,16 @@ gang_sheets:
   lengths_note: "The FAQ lists 2, 5, 10, 15 and 20 ft. Trade press reported 40 ft sheets in July 2026 and a reseller lists 7 ft; confirm on the product page before relying on either."
   upload_types: [PNG, SVG, PDF, EPS]
   preferred_type: SVG
-  upload_note: "One FAQ answer says only ready-to-print vectorized gang sheets are accepted. Conflicting; this tool writes PNG and PDF. Confirm with Ninja before the first upload."
+  upload_rule: "Ninja accepts an uploaded gang sheet only when it is fully vector: 'We only accept ready to print vectorized gang sheets' and 'We prefer vector images (SVG) when uploading DTF Gang Sheets' (FAQ, read 2026-10-19). Designs that are not vector go through Ninja's online gang sheet builder, which places uploaded designs and spaces them itself (Auto Build; Impressions, 2025-07-10)."
+  upload_workflow: "For Ninja, upload the 300 DPI transparent PNGs from each design's dtf/ folder into the online gang sheet builder and reproduce this layout, or use Auto Build. The sheet PNG and PDF written here are raster, so Ninja will not take them as an uploaded gang sheet; use them as the cut plan, or for printers that accept raster sheets."
+  upload_sources: ["https://ninjatransfers.com/a/faq", "https://impressionsmagazine.com/news/ninja-transfers-online-dtf-gang-sheet-tool/166385/"]
+  upload_checked: 2026-10-19
   pricing_note: "Price depends only on sheet size, not on how many designs are on it."
-  gap_in: 0.25                     # not a Ninja figure; tool default, confirm with Ninja
-  margin_in: 0.25                  # not a Ninja figure; tool default, confirm with Ninja
-  spacing_note: "No Ninja figure was found for spacing between designs. 0.25 in gap and margin are this tool's defaults."
+  gap_in: 0.25                     # lowest published industry minimum; not a Ninja figure
+  margin_in: 0.5                   # this tool's conservative default; the lowest published minimum is 0.25 in
+  spacing_note: "Ninja publishes no spacing figure. 0.25 in between designs is the lowest published industry minimum ('leave at least 0.25 inches between all of your designs' and 'a small margin of at least 0.25 on the edges', DTF Transfers Now, 2025-05-03). 0.5 in at the sheet edges is this tool's conservative default because edge handling varies by printer and the extra half inch costs little on a 22 in sheet. Widen gap_in for contour cuts, scissors or large graphics; no published figure exists for those (dtfsheet.com, 2026-03-16: 'no single universal measurement')."
+  spacing_sources: ["https://dtftransfersnow.com/blogs/info/tips-to-take-the-most-out-of-your-gang-sheet", "https://dtfsheet.com/blogs/blog/dtf-gang-sheet-spacing"]
+  spacing_checked: 2026-10-19
 
 industry:                          # not from Ninja; general DTF guidance
   source: "https://t-shirt.ca/dtf-knowledge-hub/dtf-artwork-requirements-and-file-formats/"

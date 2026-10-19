@@ -10,9 +10,14 @@ job: example-job
 sheet:
   width_in: 22                  # vendor sheet width; the placements file carries the default
   lengths_ft: [2, 5, 10, 15, 20]  # standard lengths to choose from; confirm at order time
-  gap_in: 0.25                  # space between transfers; not a vendor figure, confirm it
-  margin_in: 0.25               # clear border around the sheet; not a vendor figure
+  gap_in: 0.25                  # lowest published industry minimum between transfers; widen for contour cuts
+  margin_in: 0.5                # conservative clear border; the lowest published minimum is 0.25
   rotate: true                  # allow 90 degree rotation to pack tighter
+
+# Ninja Transfers accepts an uploaded gang sheet only when it is fully vector. For Ninja,
+# upload the 300 DPI PNGs from each design's dtf/ folder into its online gang sheet builder
+# and reproduce the layout in layout.json, or use Auto Build. The sheet PNG and PDF this
+# tool writes are the cut plan, and the upload for printers that accept raster sheets.
 
 items:
   - {design: example-brand, placement: full-back, variant: original, qty: 2}

@@ -36,6 +36,9 @@ class CliTestCase(unittest.TestCase):
 
     def run_tool(self, *args, source=True):
         command = [sys.executable, str(SCRIPT)]
+        if args and args[0] in ("kit", "dtf", "gang"):
+            command.append(args[0])
+            args = args[1:]
         if source:
             command.append(str(self.source))
         command.extend(["-i", str(self.inputs), "-o", str(self.outputs), *args])
@@ -321,3 +324,80 @@ class PhaseOneCliTests(CliTestCase):
         result = self.success(*SMALL)
         self.assertRegex(result.stdout, r"original/sample\.png\s+[\d.]+ KB")
         self.assertIn("Total:", result.stdout)
+
+
+class BrandConfigCliTests(CliTestCase):
+    """Kits driven by a brand configuration file."""
+
+    def write_brand(self, text):
+        path = self.root / "brand.yaml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_kit_subcommand_matches_the_legacy_invocation(self):
+        self.success(*SMALL)
+        legacy = (self.outputs / "demo" / "original" / "sample.png").read_bytes()
+        result = subprocess.run([sys.executable, str(SCRIPT), "kit", str(self.source), "-i", str(self.inputs),
+                                 "-o", str(self.root / "out2"), *SMALL], capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.root / "out2" / "demo" / "original" / "sample.png").read_bytes(), legacy)
+
+    def test_brand_config_builds_named_map_variant(self):
+        im = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle((4, 4, 35, 35), fill=(15, 35, 64, 255))
+        draw.rectangle((12, 12, 27, 27), fill=(250, 246, 238, 255))
+        im.save(self.inputs / "primary.png")
+        brand = self.write_brand(
+            "brand: Sample Co\nsources: {primary: input/primary.png}\n"
+            "colors: {ink: '#0f2340', paper: '#faf6ee'}\n"
+            "maps:\n  reverse:\n    - {from: ink, to: '#ffffff'}\n    - {from: paper, to: transparent}\n"
+            "variants: [original, reverse]\nsizes: {custom: ['sample=40x40']}\npadding: 0\n")
+        result = self.success("kit", "--brand", str(brand), "--no-icons", "--no-preview", "--no-zip", source=False)
+        kit = self.outputs / "sample-co"
+        self.assertTrue(kit.is_dir(), result.stdout)
+        with Image.open(kit / "reverse" / "sample.png") as out:
+            self.assertEqual(out.getpixel((6, 6)), (255, 255, 255, 255))
+            self.assertEqual(out.getpixel((20, 20))[3], 0)
+        with Image.open(kit / "original" / "sample.png") as out:
+            self.assertEqual(out.getpixel((20, 20)), (250, 246, 238, 255))
+        manifest = json.loads((kit / "kit.json").read_text())
+        self.assertEqual(manifest["brand"], "sample-co")
+        self.assertIn("reverse", manifest["variants"])
+
+    def test_symbol_and_horizontal_sources_are_used_where_they_fit(self):
+        Image.new("RGBA", (100, 100), (255, 0, 0, 255)).save(self.inputs / "primary.png")
+        Image.new("RGBA", (100, 100), (0, 0, 255, 255)).save(self.inputs / "symbol.png")
+        Image.new("RGBA", (300, 100), (0, 255, 0, 255)).save(self.inputs / "wide.png")
+        brand = self.write_brand(
+            "brand: Multi\nsources: {primary: input/primary.png, symbol: input/symbol.png, horizontal: input/wide.png}\n"
+            "sizes: {custom: ['tiny=32x32', 'big=200x200', 'banner=300x100']}\npadding: 0\n")
+        self.success("kit", "--brand", str(brand), "--no-icons", "--no-preview", "--no-zip", source=False)
+        kit = self.outputs / "multi" / "original"
+        with Image.open(kit / "tiny.png") as out:
+            self.assertEqual(out.getpixel((16, 16)), (0, 0, 255, 255))
+        with Image.open(kit / "big.png") as out:
+            self.assertEqual(out.getpixel((100, 100)), (255, 0, 0, 255))
+        with Image.open(kit / "banner.png") as out:
+            self.assertEqual(out.getpixel((150, 50)), (0, 255, 0, 255))
+        manifest = json.loads((self.outputs / "multi" / "kit.json").read_text())
+        files = {f["path"]: f for f in manifest["files"]}
+        self.assertEqual(files["original/tiny.png"]["source"], "symbol")
+        self.assertEqual(files["original/banner.png"]["source"], "horizontal")
+        self.assertEqual(files["original/big.png"]["source"], "primary")
+        self.assertTrue((self.outputs / "multi" / "masters" / "symbol.png").is_file())
+
+    def test_trim_fills_the_canvas_with_framed_artwork(self):
+        im = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+        ImageDraw.Draw(im).rectangle((40, 40, 59, 59), fill=(255, 0, 0, 255))
+        im.save(self.source)
+        self.success("--size", "s=50x50", "--padding", "0", "--no-icons", "--no-preview", "--no-zip", "--trim")
+        with Image.open(self.outputs / "demo" / "original" / "s.png") as out:
+            self.assertEqual(out.getchannel("A").getbbox(), (0, 0, 50, 50))
+
+    def test_brand_file_with_missing_source_fails_before_writing(self):
+        brand = self.write_brand("brand: Ghost\nsources: {primary: input/missing.png}\n")
+        result = self.run_tool("kit", "--brand", str(brand), source=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing.png", result.stdout + result.stderr)
+        self.assertFalse(self.outputs.exists())

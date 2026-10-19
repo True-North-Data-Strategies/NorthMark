@@ -6,7 +6,7 @@ import unittest
 
 from PIL import Image
 
-from logo_sizes.kit import BuildOptions, generate_kit
+from logo_sizes.kit import BuildOptions, SourceArt, generate_kit
 from logo_sizes.presets import Preset
 
 
@@ -22,7 +22,8 @@ class SizeReportingTests(unittest.TestCase):
             options = BuildOptions(presets, icons=False, preview=False, archive=False, padding=0)
             work = root / "work"
             work.mkdir()
-            result = generate_kit(source, image, False, "demo", work, options, [])
+            sources = {"primary": SourceArt("primary", source, image, False)}
+            result = generate_kit(sources, "demo", work, options, [])
             self.assertTrue((result.folder / "original" / "capped.png").is_file())
             self.assertEqual(len(result.warnings), 1)
             self.assertIn("capped.png", result.warnings[0])

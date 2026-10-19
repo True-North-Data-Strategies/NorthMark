@@ -1,6 +1,6 @@
 """Build complete kits in temporary storage, then publish with backups."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import html
@@ -15,6 +15,20 @@ from PIL import Image, ImageDraw, ImageFont
 
 from . import __version__
 from .imaging import fit_canvas, make_variant
+
+
+SYMBOL_MAX_SIDE = 64      # sizes at or under this use the symbol source when one exists
+HORIZONTAL_MIN_RATIO = 2  # canvases at least this wide for their height use the horizontal source
+
+
+@dataclass
+class SourceArt:
+    """One prepared source image and where it came from."""
+    role: str
+    path: Path
+    image: Image.Image
+    vector: bool
+    background: dict | None = None
 
 
 @dataclass
@@ -36,33 +50,42 @@ class BuildOptions:
     preview: bool = True
     archive: bool = True
     icon_background: tuple | None = None
-    background_removal: str | None = None
-    background_mode: str = "edge"
-    tolerance: int = 0
-    feather: int = 0
+    background: dict | None = None
+    trim: int | None = None
+    maps: dict = field(default_factory=dict)
 
 
 def _write_json(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
-def write_icons(image, folder, padding, upscale, background):
+def choose_source(sources, width, height):
+    """Pick the symbol for tiny canvases, the horizontal art for banners, else the primary."""
+    if "symbol" in sources and max(width, height) <= SYMBOL_MAX_SIDE:
+        return "symbol"
+    if "horizontal" in sources and width >= HORIZONTAL_MIN_RATIO * height:
+        return "horizontal"
+    return "primary"
+
+
+def write_icons(pick, folder, padding, upscale, background):
+    """``pick(width, height)`` returns the variant image to use for that canvas."""
     folder.mkdir()
     sizes = (16, 32, 48, 64, 128, 256)
-    icons = [fit_canvas(image, (size, size), padding, upscale) for size in sizes]
+    icons = [fit_canvas(pick(size, size), (size, size), padding, upscale) for size in sizes]
     icons[-1].save(folder / "favicon.ico", format="ICO", sizes=[(s, s) for s in sizes],
                    append_images=icons[:-1])
     manifest_icons = []
     for size in (192, 512):
         name = f"icon-{size}.png"
-        fit_canvas(image, (size, size), padding, upscale).save(folder / name, optimize=True)
+        fit_canvas(pick(size, size), (size, size), padding, upscale).save(folder / name, optimize=True)
         manifest_icons.append({"src": name, "sizes": f"{size}x{size}", "type": "image/png", "purpose": "any"})
         name = f"icon-maskable-{size}.png"
         # Keep the entire rectangular artwork inside the guaranteed 80% circle.
         safe_padding = max(padding, 0.5 - 0.4 / math.sqrt(2))
-        fit_canvas(image, (size, size), safe_padding, upscale, background).save(folder / name, optimize=True)
+        fit_canvas(pick(size, size), (size, size), safe_padding, upscale, background).save(folder / name, optimize=True)
         manifest_icons.append({"src": name, "sizes": f"{size}x{size}", "type": "image/png", "purpose": "maskable"})
-    fit_canvas(image, (180, 180), padding, upscale, background).save(folder / "apple-touch-icon.png", optimize=True)
+    fit_canvas(pick(180, 180), (180, 180), padding, upscale, background).save(folder / "apple-touch-icon.png", optimize=True)
     _write_json(folder / "manifest.webmanifest", {"icons": manifest_icons})
 
 
@@ -103,48 +126,15 @@ def write_preview(images, folder, exports):
     (folder / "preview.html").write_text(page, encoding="utf-8")
 
 
-def generate_kit(source, image, vector, slug, work, options, notes):
-    folder = work / slug
-    folder.mkdir()
-    masters = folder / "masters"
-    masters.mkdir()
-    shutil.copy2(source, masters / ("source" + source.suffix.lower()))
-    images = {variant: make_variant(image, variant) for variant in options.variants}
-    exports, details, warnings = [], {}, []
-    for name, variant_image in images.items():
-        variant_dir = folder / name
-        variant_dir.mkdir()
-        for preset in options.presets:
-            fitted = fit_canvas(variant_image, (preset.width, preset.height), options.padding,
-                                options.upscale or vector)
-            for format_name in options.formats:
-                path = variant_dir / f"{preset.name}.{format_name}"
-                if format_name == "webp":
-                    fitted.save(path, format="WEBP", lossless=True, exact=True)
-                else:
-                    fitted.save(path, format="PNG", optimize=True)
-                relative = path.relative_to(folder).as_posix()
-                exports.append(relative)
-                details[relative] = {"width": preset.width, "height": preset.height, "variant": name,
-                                     "preset": preset.name, "purpose": preset.purpose}
-                size = path.stat().st_size
-                if preset.max_kb is not None and size > preset.max_kb * 1024:
-                    warnings.append(f"{relative} is {size / 1024:.1f} KB, over the {preset.max_kb} KB "
-                                    f"cap for {preset.name}.")
-        if options.icons:
-            background = options.icon_background or ((32, 32, 32, 255) if name == "white" else (255, 255, 255, 255))
-            write_icons(variant_image, variant_dir / "app-icons", options.padding,
-                        options.upscale or vector, background)
-            exports.extend(p.relative_to(folder).as_posix() for p in sorted((variant_dir / "app-icons").iterdir()))
-    if options.preview:
-        write_preview(images, folder, exports)
-    guide = '''LOGO KIT - WHICH FILE TO USE
+GUIDE = '''LOGO KIT - WHICH FILE TO USE
 
 original/: Original colors, with existing transparency preserved.
 white/: White artwork for dark surfaces, if requested.
 black/: Black artwork for light surfaces, if requested.
 grayscale/: Neutral shades, if requested.
 inverted/: A color negative. This changes every brand color, if requested.
+Other folders are named color-map variants from the brand configuration,
+such as reverse/ for a dark-background version.
 
 PNG preserves transparency. WebP exports, if requested, are lossless.
 app-icons/favicon.ico contains six browser icon sizes.
@@ -157,13 +147,17 @@ The --icon-background option overrides that choice for all variants.
 
 Use preview.html or preview.png to inspect dark/light contrast and tiny
 icon legibility. A detailed wordmark often needs separate symbol-only art.
-Horizontal, stacked and symbol versions require their own source designs.
+When a brand configuration supplies symbol and horizontal sources, sizes
+of 64 pixels and under use the symbol and banner shapes use the horizontal
+art; kit.json records which source made each file.
 
-masters/source.* is the untouched original, including any source metadata.
-A supplied vector SVG remains vector. Raster sources are NOT vectorized.
-master-2048.png is a sized derivative and may have been enlarged.
-Pixel dimensions alone do not specify print size, resolution or CMYK color.
-Ask your printer for the required vector artwork and print specifications.
+masters/source.* is the untouched primary original, including any source
+metadata. Other masters/ files are the untouched symbol and horizontal
+sources. A supplied vector SVG remains vector. Raster sources are NOT
+vectorized. master-2048.png is a sized derivative and may have been
+enlarged. Pixel dimensions alone do not specify print size, resolution or
+CMYK color. Ask your printer for the required vector artwork and print
+specifications.
 
 Background removal only runs when explicitly requested. Edge mode keeps
 enclosed details; all mode removes all matching colors, including details.
@@ -174,14 +168,65 @@ Platform requirements change; preset names are convenient starting sizes.
 Check current requirements before uploading. Artwork rights remain with
 their respective owners; the software license grants no artwork rights.
 '''
-    (folder / "GUIDE.txt").write_text(guide, encoding="utf-8")
+
+
+def generate_kit(sources, slug, work, options, notes):
+    """Write a complete kit for one brand into ``work/slug`` and return a KitResult.
+
+    ``sources`` maps roles (primary, symbol, horizontal) to SourceArt.
+    """
+    primary = sources["primary"]
+    folder = work / slug
+    folder.mkdir()
+    masters = folder / "masters"
+    masters.mkdir()
+    for role, art in sources.items():
+        name = "source" if role == "primary" else role
+        shutil.copy2(art.path, masters / (name + art.path.suffix.lower()))
+    variants = {role: {variant: make_variant(art.image, variant, options.maps) for variant in options.variants}
+                for role, art in sources.items()}
+    exports, details, warnings = [], {}, []
+    for name in options.variants:
+        variant_dir = folder / name
+        variant_dir.mkdir()
+        for preset in options.presets:
+            role = choose_source(sources, preset.width, preset.height)
+            art = sources[role]
+            fitted = fit_canvas(variants[role][name], (preset.width, preset.height), options.padding,
+                                options.upscale or art.vector)
+            for format_name in options.formats:
+                path = variant_dir / f"{preset.name}.{format_name}"
+                if format_name == "webp":
+                    fitted.save(path, format="WEBP", lossless=True, exact=True)
+                else:
+                    fitted.save(path, format="PNG", optimize=True)
+                relative = path.relative_to(folder).as_posix()
+                exports.append(relative)
+                details[relative] = {"width": preset.width, "height": preset.height, "variant": name,
+                                     "preset": preset.name, "purpose": preset.purpose, "source": role}
+                size = path.stat().st_size
+                if preset.max_kb is not None and size > preset.max_kb * 1024:
+                    warnings.append(f"{relative} is {size / 1024:.1f} KB, over the {preset.max_kb} KB "
+                                    f"cap for {preset.name}.")
+        if options.icons:
+            background = options.icon_background or ((32, 32, 32, 255) if name == "white" else (255, 255, 255, 255))
+
+            def pick(width, height, name=name):
+                return variants[choose_source(sources, width, height)][name]
+            write_icons(pick, variant_dir / "app-icons", options.padding,
+                        options.upscale or primary.vector, background)
+            exports.extend(p.relative_to(folder).as_posix() for p in sorted((variant_dir / "app-icons").iterdir()))
+    if options.preview:
+        write_preview(variants["primary"], folder, exports)
+    (folder / "GUIDE.txt").write_text(GUIDE, encoding="utf-8")
     metadata = {
-        "generator_version": __version__, "brand": slug, "source_name": source.name,
-        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "vector_source": vector,
+        "generator_version": __version__, "brand": slug, "source_name": primary.path.name,
+        "source_sha256": hashlib.sha256(primary.path.read_bytes()).hexdigest(), "vector_source": primary.vector,
+        "sources": {role: {"name": art.path.name, "sha256": hashlib.sha256(art.path.read_bytes()).hexdigest(),
+                           "vector": art.vector, "background": art.background} for role, art in sources.items()},
         "variants": list(options.variants), "formats": list(options.formats), "padding": options.padding,
-        "upscale_raster": options.upscale, "background_removal": options.background_removal,
-        "background_mode": options.background_mode, "tolerance": options.tolerance,
-        "feather": options.feather, "notes": notes, "warnings": warnings, "files": [],
+        "upscale_raster": options.upscale, "background": options.background, "trim": options.trim,
+        "notes": notes, "warnings": warnings, "files": [],
     }
     for path in sorted(folder.rglob("*")):
         if path.is_file():

@@ -254,7 +254,10 @@ def trim_to_art(image, threshold=0):
     return image.crop(box), box
 
 
-def make_variant(image, name):
+def make_variant(image, name, maps=None):
+    """Standard variants, or a named color map from the brand configuration."""
+    if maps and name in maps:
+        return color_map(image, maps[name])
     alpha = image.getchannel("A")
     if name in ("white", "black"):
         if alpha.getextrema()[0] == 255:

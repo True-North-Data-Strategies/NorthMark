@@ -9,6 +9,7 @@ from pathlib import Path
 import socket
 import sys
 import tempfile
+import uuid
 
 from . import __version__
 from .config import load_brand
@@ -68,6 +69,35 @@ def stale_lock_owner(lock):
     return None if process_alive(int(pid)) else int(pid)
 
 
+def reclaim_stale_lock(lock):
+    """Remove a lock whose owner has exited. Exactly one caller wins: the stale file is renamed
+    first, which is atomic, and only the renamer deletes it. Returns True when this call reclaimed it."""
+    owner = stale_lock_owner(lock)
+    if owner is None:
+        return False
+    claimed = lock.with_name(f".logo-kit.lock.stale-{uuid.uuid4().hex[:8]}")
+    try:
+        lock.rename(claimed)
+    except OSError:
+        return False        # another process reclaimed it first, or it is live again
+    try:
+        if stale_lock_owner(claimed) != owner:
+            claimed.rename(lock)   # the file changed hands between the check and the rename
+            return False
+    except OSError:
+        return False
+    claimed.unlink()
+    print(f"Removed a stale lock left by process {owner}, which is no longer running on this host.")
+    return True
+
+
+def _lock_is_mine(lock):
+    try:
+        return f"pid: {os.getpid()}" in lock.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+
+
 @contextmanager
 def output_lock(root):
     root.mkdir(parents=True, exist_ok=True)
@@ -78,18 +108,17 @@ def output_lock(root):
             handle = lock.open("x", encoding="utf-8")
             break
         except FileExistsError as exc:
-            owner = stale_lock_owner(lock) if attempt == 0 else None
-            if owner is None:
-                raise ValueError("Another export holds .logo-kit.lock. If it was interrupted, check that it has stopped before removing the lock.") from exc
-            print(f"Removed a stale lock left by process {owner}, which is no longer running on this host.")
-            lock.unlink()
+            if attempt == 0 and reclaim_stale_lock(lock):
+                continue
+            raise ValueError("Another export holds .logo-kit.lock. If it was interrupted, check that it has stopped before removing the lock.") from exc
     try:
         with handle:
             handle.write(f"pid: {os.getpid()}\nhost: {socket.gethostname()}\n"
                          f"started: {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n")
         yield
     finally:
-        lock.unlink()
+        if _lock_is_mine(lock):
+            lock.unlink()
 
 
 def add_common_arguments(parser):
@@ -309,6 +338,17 @@ def run_kit(argv):
 
 
 DEFAULT_PLACEMENTS = ("left-chest", "full-front", "full-back")
+MAX_VECTOR_SIDE = 16384          # Cairo refuses larger surfaces
+MAX_VECTOR_PIXELS = 90_000_000   # a one-off render of at most about 360 MB in memory
+
+
+def cap_vector_render(side, width, height):
+    """Largest long side at or below ``side`` that respects the surface and pixel limits."""
+    side = min(side, MAX_VECTOR_SIDE)
+    ratio = min(width, height) / max(width, height)
+    if side * side * ratio > MAX_VECTOR_PIXELS:
+        side = int(math.sqrt(MAX_VECTOR_PIXELS / ratio))
+    return max(side, 1)
 
 
 def add_background_arguments(parser):
@@ -427,11 +467,15 @@ def run_dtf(argv):
                 # A vector renders at any size. Re-render so the trimmed art, not the whole
                 # canvas, carries the pixels the largest placement needs.
                 _, box = trim_to_art(art.image, request.trim_threshold)
-                coverage = max((box[2] - box[0]) / art.image.width, (box[3] - box[1]) / art.image.height)
+                coverage = max(box[2] - box[0], box[3] - box[1]) / max(art.image.width, art.image.height)
                 if coverage < 0.999:
-                    bigger = math.ceil(render_size / coverage) + 2
+                    wanted = math.ceil(render_size * 1.01 / coverage) + 2
+                    bigger = cap_vector_render(wanted, art.image.width, art.image.height)
                     sources.update(prepare_sources({role: art.path}, bigger, notes, background))
                     notes.append(f"{role}: vector re-rendered at {bigger} px so the trimmed art reaches 300 DPI.")
+                    if bigger < wanted:
+                        notes.append(f"{role}: the render was capped at {bigger} px (the art fills only "
+                                     f"{coverage:.0%} of its canvas); the verdict below is the honest result.")
             with tempfile.TemporaryDirectory(prefix=".logo-build-", dir=args.output_dir) as temporary:
                 folder, manifest, outputs = build_dtf(sources, request, data, Path(temporary))
                 backup = publish([(folder, destination)], root, f"{request.design}-dtf", args.overwrite)
@@ -480,7 +524,7 @@ def run_gang(argv):
     try:
         data = load_placements(args.placements_file)
         root = args.output_dir.resolve()
-        job = load_job(args.job, root)
+        job = load_job(args.job, root, data)
         if args.no_rotate:
             job.rotate = False
         destination = root / "gang-sheets" / job.name

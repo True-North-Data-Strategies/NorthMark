@@ -240,3 +240,63 @@ class VectorDtfTests(unittest.TestCase):
             self.assertRegex(result.stdout, r"source DPI (3\d\d|[4-9]\d\d|\d{4,}) OK")
             path = root / "out" / "mark" / "dtf" / "adult" / "full-back" / "original" / "mark-full-back-11.20x14.00in.png"
             self.assertTrue(path.is_file(), result.stdout)
+
+
+class ReviewFindingDtfTests(unittest.TestCase):
+    def test_vector_render_cap_respects_surface_and_pixel_limits(self):
+        from logo_sizes.cli import MAX_VECTOR_PIXELS, MAX_VECTOR_SIDE, cap_vector_render
+        self.assertEqual(cap_vector_render(4000, 100, 100), 4000)
+        self.assertEqual(cap_vector_render(42_000, 1000, 100), MAX_VECTOR_SIDE)
+        capped = cap_vector_render(42_000, 1000, 1000)
+        self.assertLessEqual(capped * capped, MAX_VECTOR_PIXELS)
+        self.assertGreater(capped, 7000)
+
+    def test_dpi_thresholds_apply_before_rounding(self):
+        self.assertEqual(effective_dpi(299, 299, 2, 2).level, "fail")
+        self.assertEqual(effective_dpi(299, 299, 2, 2).dpi, 149)
+        self.assertEqual(effective_dpi(599, 599, 2, 2).level, "warn")
+        self.assertEqual(effective_dpi(600, 600, 2, 2).level, "ok")
+
+    def test_press_card_png_grows_to_hold_every_line_and_pdf_paginates(self):
+        from logo_sizes.dtf import render_press_card_pdf, render_press_card_png
+        lines = [f"line {i}: " + "x" * 160 for i in range(120)]
+        with tempfile.TemporaryDirectory() as temp:
+            png = Path(temp) / "card.png"
+            render_press_card_png(lines, png)
+            with Image.open(png) as out:
+                self.assertGreater(out.height, 120 * 24)
+            if HAS_REPORTLAB:
+                pdf = Path(temp) / "card.pdf"
+                render_press_card_pdf(lines, pdf, "card")
+                data = pdf.read_bytes()
+                self.assertGreaterEqual(data.count(b"/Type /Page\n") + data.count(b"/Type /Page "), 2)
+
+    def test_uvdtf_variants_outside_the_dtf_list_are_prepared(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            Image.new("RGBA", (600, 600), (20, 40, 80, 255)).save(root / "demo.png")
+            brand = root / "brand.yaml"
+            brand.write_text("brand: Sample\nsources: {primary: demo.png}\ncolors: {ink: '#142850'}\n"
+                             "maps: {reverse: [{from: ink, to: '#ffffff'}]}\n"
+                             "dtf: {placements: [left-chest], variants: [original]}\n"
+                             "uvdtf: {sizes: [{name: sticker-2x2, width_in: 2, height_in: 2}], variants: [reverse]}\n")
+            result = subprocess.run([sys.executable, str(SCRIPT), "dtf", "--brand", str(brand), "-o", str(root / "out")],
+                                    capture_output=True, text=True, timeout=120)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            sticker = root / "out" / "sample" / "dtf" / "uvdtf" / "sticker-2x2" / "reverse"
+            self.assertTrue(any(sticker.glob("*.png")), result.stdout)
+            self.assertFalse((root / "out" / "sample" / "dtf" / "adult" / "left-chest" / "reverse").exists())
+
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
+    def test_vector_coverage_uses_the_longest_side(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "wide.svg"
+            # The square is a quarter of the canvas height; longest-side coverage is 0.25, so the
+            # re-render must grow four-fold (within the render caps) to reach 300 DPI.
+            source.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 250">'
+                              '<rect x="375" y="0" width="250" height="250" fill="#102040"/></svg>')
+            result = subprocess.run([sys.executable, str(SCRIPT), "dtf", str(source), "--placement", "full-back",
+                                     "-o", str(root / "out")], capture_output=True, text=True, timeout=240)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertRegex(result.stdout, r"source DPI (3\d\d|[4-9]\d\d|\d{4,}) OK")

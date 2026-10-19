@@ -28,6 +28,7 @@ keep. Read the user manual first for what the commands do.
 | `logo_sizes/dtf.py` | Placement data access, inch and pixel geometry, DPI verdicts, alpha hardening, thin-stroke estimate, garment contrast, mockups, order sheet, press card, `build_dtf()` |
 | `logo_sizes/gang.py` | Job file loading, deterministic shelf packing, banded PNG writer, PDF sheets, layout and cut list, preview, cost compare, `build_gang()` |
 | `logo_sizes/report.py` | The file table printed at the end of every run |
+| `logo_sizes/files.py` | Streamed SHA-256 for output manifests |
 | `tools/check_public_files.py` | The publishing guard run by CI and before every push |
 | `examples/` | The demo-art generator, example brand, order and job files, and CSV templates |
 
@@ -62,8 +63,8 @@ industry guidance as not from the vendor; leave unknown numbers out rather than 
    contrast between art and background, and records the values used.
 3. `remove_background` computes the per-pixel distance to the color, turns it into a
    background amount with a linear ramp (`_ramp`), limits it to border-connected
-   regions in `edge` mode (flood fill plus a small dilation so anti-aliased pixels are
-   included), subtracts the background's contribution from partially kept pixels
+   regions in `edge` mode (a flood fill through every partly-background pixel, so pure
+   art pixels act as barriers and a one-pixel outline protects what it encloses), subtracts the background's contribution from partially kept pixels
    (`_decontaminate`, via `ImageMath`), and multiplies the alpha.
 4. `trim_to_art` crops to the alpha bounding box above a threshold.
 5. `make_variant` produces the standard variants or applies a named `color_map`.
@@ -79,16 +80,20 @@ pixel colors do not bleed into edges.
 Every command builds into a temporary folder inside the output directory
 (`tempfile.TemporaryDirectory(prefix=".logo-build-")`) and then calls `kit.publish()`,
 which moves each built item to its destination with `rename`. Existing destinations
-are moved to `.backups/<label>-<UTC stamp>-<id>/` first. If any move fails, the moves
-already made are reversed and the backups restored, so the previous complete output
-always survives. Symbolic links at any destination are refused.
+are moved to `.backups/<label>-<UTC stamp>-<id>/` first, including outputs that have no
+replacement this run (a kit's old ZIP when `--no-zip` is used). If any move fails, the
+moves already made are reversed and the backups restored, so the previous complete
+output always survives. Symbolic links at any destination are refused.
 
 `cli.output_lock` creates `.logo-kit.lock` exclusively and writes the process id, host
-and start time. On `FileExistsError` it reads the lock; if the host matches and the
-process no longer exists (`process_alive`, which never signals or terminates), the lock
-is removed with a message and creation is retried once. On Windows the check uses
-`OpenProcess` with `PROCESS_QUERY_LIMITED_INFORMATION`, because `os.kill(pid, 0)`
-terminates on that platform.
+and start time. On `FileExistsError` it calls `reclaim_stale_lock`: if the host matches
+and the process no longer exists (`process_alive`, which never signals or terminates),
+the stale file is renamed to a unique name first, which is atomic, so only one of two
+racing runs can reclaim it; the winner deletes the renamed file and retries creation
+once. On exit the lock is removed only if it still carries this process id. On Windows
+the liveness check uses `OpenProcess` with `PROCESS_QUERY_LIMITED_INFORMATION` and
+`GetExitCodeProcess`, because `os.kill(pid, 0)` terminates on that platform and an
+exited process stays openable while a handle to it is held.
 
 ## Tests
 
@@ -135,7 +140,7 @@ them as a workflow artifact and creates the GitHub release with generated notes.
 
 | Area | Rule |
 | --- | --- |
-| YAML | `yaml.safe_load` only; documents must be mappings; unknown keys are errors |
+| YAML | `yaml.safe_load` only; documents must be mappings; unknown keys are errors; names that become folders must be one safe lowercase component |
 | SVG | defusedxml parsing with DTDs, entities and external references forbidden; an element allow list; no `on*` attributes, external `href`, `url()`, escapes, imports or comments in attributes or style blocks; 5 MB cap; CairoSVG with `unsafe=False` |
 | Rasters | Decompression-bomb warnings are errors; a 32 MP kit limit and a 60 MP per-transfer limit |
 | Paths | Outputs that are symbolic links are refused; a source inside its own output folder is refused; slugs come from `slugify` with Windows reserved names avoided |

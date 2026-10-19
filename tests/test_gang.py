@@ -206,3 +206,34 @@ class GangCliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFindingGangTests(unittest.TestCase):
+    def test_rotation_trials_skip_orientations_that_cannot_fit(self):
+        sheets = pack([item("tall", 5, 30)], 22, FEET, 0.25, 0.25, rotate=True)
+        self.assertEqual(len(sheets), 1)
+        self.assertEqual(len(sheets[0].placements), 1)
+
+    def test_pdf_frame_matches_png_rotation_and_keeps_aspect(self):
+        from logo_sizes.gang import Placed, pdf_image_frame
+        square = Placed("a", "a", Path("a.png"), 1, 1.0, 2.0, 4.0, 6.0, False)
+        frame = pdf_image_frame(square, 20.0, (300, 300))
+        self.assertEqual(frame["rotate"], 0)
+        self.assertAlmostEqual(frame["width"], 4.0 * 72)
+        self.assertAlmostEqual(frame["height"], 4.0 * 72)
+        self.assertAlmostEqual(frame["x"], 1.0 * 72)
+        self.assertAlmostEqual(frame["y"], (20.0 - 2.0 - 1.0 - 4.0) * 72)
+        turned = Placed("b", "b", Path("b.png"), 1, 1.0, 2.0, 6.0, 4.0, True)
+        frame = pdf_image_frame(turned, 20.0, (400, 600))
+        self.assertEqual(frame["rotate"], 90)
+        self.assertAlmostEqual(frame["width"], 4.0 * 72)
+        self.assertAlmostEqual(frame["height"], 6.0 * 72)
+
+    def test_job_defaults_follow_the_given_vendor_data(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            Image.new("RGBA", (300, 300), (200, 0, 0, 255)).save(root / "a.png", dpi=(300, 300))
+            (root / "job.yaml").write_text("job: j\nitems:\n  - {file: a.png, qty: 1}\n")
+            data = {"gang_sheets": {"width_in": 10, "lengths_ft": [1], "gap_in": 0.5, "margin_in": 0.5}}
+            job = load_job(root / "job.yaml", root, data)
+            self.assertEqual((job.width_in, job.lengths_in, job.gap_in, job.margin_in), (10.0, (12.0,), 0.5, 0.5))

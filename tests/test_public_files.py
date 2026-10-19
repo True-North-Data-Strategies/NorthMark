@@ -118,3 +118,26 @@ class PrivateTermTests(PublicFileChecks):
         (self.root / "notes.md").write_text("SecretBrand appears in prose documentation.\n")
         self.git("add", "notes.md")
         self.assertEqual(self.check().returncode, 0)
+
+
+@unittest.skipUnless(shutil.which("git"), "git is needed to check public-file protection")
+class PrivateTermHardeningTests(PublicFileChecks):
+    def test_unreadable_private_terms_file_fails_the_check(self):
+        (self.root / "local-assets").mkdir()
+        (self.root / "local-assets" / "private-terms.txt").write_bytes(b"\xff\xfe\x00bad")
+        (self.root / "README.md").write_text("fine\n")
+        self.git("add", "README.md")
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("private-terms", result.stderr)
+        self.assertNotIn("bad", result.stderr + result.stdout)
+
+    def test_private_term_inside_a_path_is_redacted(self):
+        (self.root / "local-assets").mkdir()
+        (self.root / "local-assets" / "private-terms.txt").write_text("SecretBrand\n")
+        (self.root / "examples").mkdir()
+        (self.root / "examples" / "SecretBrand.yaml").write_text("brand: secretbrand\n")
+        self.git("add", "examples/SecretBrand.yaml")
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("secretbrand", (result.stderr + result.stdout).lower())

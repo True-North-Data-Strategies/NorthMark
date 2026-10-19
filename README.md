@@ -5,12 +5,10 @@
   <img src="https://raw.githubusercontent.com/Jjohnston70/Jjohnston70/main/true-north-logo-layered-v3.png" alt="True North Data Strategies" width="240" />
   <br /><br />
   <a href="#stack"><img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20Pillow-0A8EA0?style=for-the-badge" alt="Built with Python | Pillow" /></a>
-  <a href="https://truenorthstrategyops.com"><img src="https://img.shields.io/badge/Built%20by-TNDS-1F6FEB?style=for-the-badge" alt="Built by TNDS" /></a>
+  <a href="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml/badge.svg" alt="CI status" /></a>
   <a href="#contact"><img src="https://img.shields.io/badge/Contact-TNDS-181717?style=for-the-badge" alt="Contact" /></a>
 </div>
 <!-- TNDS-HEADER:END -->
-
-<p align="center"><a href="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/create-logos-all-sizes/actions/workflows/tests.yml/badge.svg" alt="Tests and public-file check status" /></a></p>
 
 ## Contents
 
@@ -41,9 +39,7 @@ AI is required.
 | Ordering a transfer that prints blurry | An honest source-DPI verdict before any resampling |
 | A rerun quietly overwriting the last good set of files | Atomic publish with dated backups and a process lock |
 
-<p align="center">
-  <img src="docs/images/demo-preview.png" alt="Grid of logo color versions on white, dark and checkerboard backgrounds, with circular profile crops, browser tab mocks and 16, 32 and 48 pixel samples" width="720" />
-</p>
+![Grid of logo color versions on white, dark and checkerboard backgrounds, with circular profile crops, browser tab mocks and 16, 32 and 48 pixel samples](docs/images/demo-preview.png)
 
 *The kit preview for the generated demo mark. Each color version sits on white, dark and
 transparent backgrounds, then in circular profile crops and light and dark browser tabs.
@@ -387,7 +383,8 @@ valid sources still finish.
 
 An output lock prevents two processes from publishing into the same folder at once. The
 lock records its process id and host. If that process has exited on the same machine,
-the next run clears the stale lock itself and says so; a lock from a live process or
+the next run reclaims the stale lock itself and says so; the reclaim is a rename, so two
+runs that find the same stale lock cannot both proceed. A lock from a live process or
 another machine is respected.
 
 ## Development and installation
@@ -443,4 +440,6 @@ software license grants no rights to any source artwork you process.
 Jacob Johnston | True North Data Strategies LLC, SDVOSB | Colorado Springs, Colorado
 
 jacob@truenorthstrategyops.com | [truenorthstrategyops.com](https://truenorthstrategyops.com) | [pipelinepunks.com](https://pipelinepunks.com)
+
+_Maintained by the TNDS README steward. Last reviewed 2026-10-19._
 <!-- TNDS-FOOTER:END -->

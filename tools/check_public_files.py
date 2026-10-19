@@ -20,19 +20,38 @@ PRIVATE_TERMS_FILE = ROOT / "local-assets" / "private-terms.txt"
 CONFIG_EXTENSIONS = {".yaml", ".yml", ".csv"}
 
 
+class PrivateTermsUnreadable(Exception):
+    """The terms file exists but cannot be read; screening must not be silently skipped."""
+
+
 def load_private_terms():
     """Lowercased terms from local-assets/private-terms.txt, or None when the file is absent."""
     try:
         lines = PRIVATE_TERMS_FILE.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
+    except FileNotFoundError:
         return None
+    except (OSError, UnicodeError) as exc:
+        raise PrivateTermsUnreadable(type(exc).__name__) from None
     return [line.strip().lower() for line in lines if line.strip() and not line.lstrip().startswith("#")]
+
+
+def display(path, terms):
+    """A path for messages; hidden when it would reveal a private term."""
+    shown = path.as_posix()
+    if terms and any(term in shown.lower() for term in terms):
+        return "<path withheld: it contains a private term>"
+    return shown
 
 
 def main():
     result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True)
     paths = [Path(name.decode("utf-8")) for name in result.stdout.split(b"\0") if name]
-    terms = load_private_terms()
+    try:
+        terms = load_private_terms()
+    except PrivateTermsUnreadable as exc:
+        print(f"local-assets/private-terms.txt exists but could not be read as UTF-8 text ({exc}). "
+              "Fix the private-terms file before publishing.", file=sys.stderr)
+        return 1
     failures, demo_images = [], []
     for path in paths:
         if path.parts[:-1] == DEMO_IMAGE_FOLDER and path.suffix.lower() in DEMO_IMAGE_EXTENSIONS:
@@ -40,30 +59,30 @@ def main():
                 size = int(subprocess.run(["git", "cat-file", "-s", ":" + path.as_posix()], cwd=ROOT,
                                           capture_output=True, check=True, text=True).stdout)
             except (ValueError, OSError, subprocess.CalledProcessError):
-                failures.append(f"README demo image is unreadable: {path.as_posix()}")
+                failures.append(f"README demo image is unreadable: {display(path, terms)}")
                 continue
             if size > DEMO_IMAGE_MAX_BYTES:
-                failures.append(f"README demo image is over {DEMO_IMAGE_MAX_BYTES:,} bytes: {path.as_posix()}")
+                failures.append(f"README demo image is over {DEMO_IMAGE_MAX_BYTES:,} bytes: {display(path, terms)}")
             else:
                 demo_images.append(path)
             continue
         if path.parts[0] in PRIVATE_FOLDERS or path.suffix.lower() in ARTWORK or path.name.startswith(".env"):
-            failures.append(f"Private or generated file is tracked: {path.as_posix()}")
+            failures.append(f"Private or generated file is tracked: {display(path, terms)}")
             continue
         try:
             staged = subprocess.run(["git", "show", ":" + path.as_posix()], cwd=ROOT,
                                     capture_output=True, check=True)
             content = staged.stdout.decode("utf-8")
         except (UnicodeError, OSError, subprocess.CalledProcessError):
-            failures.append(f"Tracked file is unreadable or binary: {path.as_posix()}")
+            failures.append(f"Tracked file is unreadable or binary: {display(path, terms)}")
             continue
         if SECRET.search(content):
-            failures.append(f"Possible credential in tracked file: {path.as_posix()}")
+            failures.append(f"Possible credential in tracked file: {display(path, terms)}")
         if terms and path.suffix.lower() in CONFIG_EXTENSIONS:
             lowered = content.lower()
-            if any(term in lowered for term in terms):
+            if any(term in lowered for term in terms) or any(term in path.as_posix().lower() for term in terms):
                 # Never echo the term itself; the list is private.
-                failures.append(f"Tracked configuration mentions a private term: {path.as_posix()}")
+                failures.append(f"Tracked configuration mentions a private term: {display(path, terms)}")
     for failure in failures:
         print(failure, file=sys.stderr)
     if not paths:
@@ -72,7 +91,7 @@ def main():
     if failures:
         return 1
     for image in demo_images:
-        print(f"README demo image: {image.as_posix()}")
+        print(f"README demo image: {display(image, terms)}")
     if terms is None:
         print("private-terms: no local-assets/private-terms.txt found; add one to screen tracked YAML and CSV for private names.")
     else:

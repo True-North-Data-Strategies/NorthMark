@@ -6,7 +6,7 @@ import math
 import re
 import warnings
 
-from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFilter, ImageMath, ImageOps
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageMath, ImageOps
 
 from .presets import MAX_PIXELS
 
@@ -184,11 +184,10 @@ def remove_background(image, color, tolerance=0, mode="edge", feather=0):
     distance = _distance_to_color(image, color)
     amount = _ramp(distance, tolerance, feather)
     if mode == "edge":
-        core = amount.point(lambda v: 255 if v >= 128 else 0)
-        region = _connected_to_border(core)
-        if feather > 0:
-            # Anti-aliased edges extend a few pixels past the mostly-background core.
-            region = region.filter(ImageFilter.MaxFilter(7))
+        # Flood from the border through every pixel that is at least partly background.
+        # Pixels of pure art (amount 0) are barriers, so even a one-pixel outline keeps
+        # the background-colored area it encloses.
+        region = _connected_to_border(amount.point(lambda v: 255 if v > 0 else 0))
         amount = ImageChops.multiply(amount, region)
     keep = ImageChops.invert(amount)
     if feather > 0:

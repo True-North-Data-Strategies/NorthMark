@@ -129,3 +129,54 @@ class BrandConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFindingTests(BrandConfigTests):
+    """Hardening from the code review: safe names, list colors and resolved web colors."""
+
+    def test_map_names_must_be_safe_single_components(self):
+        for name in ("../escape", "/abs", "masters", "web", "print", "app-icons", "Reverse Dark"):
+            with self.subTest(name=name):
+                path = self.write(f"""
+                    brand: Sample
+                    sources: {{primary: mark.png}}
+                    maps:
+                      "{name}":
+                        - {{from: "#0f2340", to: "#ffffff"}}
+                """, "map.yaml")
+                with self.assertRaises(ConfigError):
+                    load_brand(path)
+
+    def test_uvdtf_size_names_must_be_safe_single_components(self):
+        for name in ("../x", "/abs", "sticker 4x6", ".."):
+            with self.subTest(name=name):
+                path = self.write(f"""
+                    brand: Sample
+                    sources: {{primary: mark.png}}
+                    uvdtf:
+                      sizes:
+                        - {{name: "{name}", width_in: 4, height_in: 6}}
+                """, "uv.yaml")
+                with self.assertRaises(ConfigError):
+                    load_brand(path)
+
+    def test_named_rgb_list_colors_resolve_in_maps(self):
+        path = self.write("""
+            brand: Sample
+            sources: {primary: mark.png}
+            colors: {ink: [15, 35, 64]}
+            maps: {reverse: [{from: ink, to: "#ffffff"}]}
+            variants: [reverse]
+        """)
+        self.assertEqual(load_brand(path).maps["reverse"][0]["from"], (15, 35, 64))
+
+    def test_web_colors_are_stored_resolved(self):
+        path = self.write("""
+            brand: Sample
+            sources: {primary: mark.png}
+            colors: {ink: "#112233"}
+            web: {name: Sample, theme_color: ink, background_color: white}
+        """)
+        brand = load_brand(path)
+        self.assertEqual(brand.web["theme_color"], "#112233")
+        self.assertEqual(brand.web["background_color"], "#ffffff")

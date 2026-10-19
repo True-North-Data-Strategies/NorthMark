@@ -164,3 +164,13 @@ class TrimTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFindingMattingTests(unittest.TestCase):
+    def test_feathered_edge_mode_does_not_cross_a_one_pixel_outline(self):
+        image = Image.new("RGBA", (60, 60), CREAM + (255,))
+        ImageDraw.Draw(image).rectangle((15, 15, 44, 44), outline=NAVY + (255,), width=1)
+        result = remove_background(image, CREAM, tolerance=4, mode="edge", feather=230)
+        self.assertEqual(result.getpixel((30, 30)), CREAM + (255,))
+        self.assertEqual(result.getpixel((17, 17)), CREAM + (255,))
+        self.assertEqual(result.getpixel((2, 2))[3], 0)

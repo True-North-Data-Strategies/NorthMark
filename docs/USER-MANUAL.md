@@ -129,7 +129,7 @@ any artwork is read.
 | `trim` | `true`, or `{enabled, threshold}` | off | Threshold 0 to 255, default 8 |
 | `padding` | 0 to below 0.5 | `0.08` | |
 | `variants` | list | `[original]` | Standard names or map names |
-| `maps.<name>` | list of entries | none | Each entry: `from` (color), `to` (color or `transparent`), `tolerance`, `feather` |
+| `maps.<name>` | list of entries | none | Name: lowercase letters, digits, hyphens, underscores; not a kit folder name. Each entry: `from` (color), `to` (color or `transparent`), `tolerance`, `feather` |
 | `sizes.groups` | list | | Standard groups plus `banners` and `share` |
 | `sizes.presets` | list | | Individual preset names |
 | `sizes.custom` | list | | `name=WIDTHxHEIGHT` strings |
@@ -143,7 +143,7 @@ any artwork is read.
 | `dtf.garments` | list | all in the data file | Names from the placements file |
 | `dtf.symbol_for` | list | none | Placements that use the symbol source |
 | `dtf.overrides.<placement>` | `{width_in, height_in}` | vendor average | The box the art is fitted into |
-| `uvdtf.sizes` | list of `{name, width_in, height_in}` | none | Sticker sizes |
+| `uvdtf.sizes` | list of `{name, width_in, height_in}` | none | Sticker sizes; names follow the same rule as map names |
 | `uvdtf.variants` | list | brand `variants` | |
 
 When no `sizes` block is present the standard fifteen presets are used.
@@ -291,7 +291,7 @@ Where two vendor statements conflict, both are recorded and the safer one is use
 | Message | Cause and fix |
 | --- | --- |
 | `Output already exists` | Add `--overwrite` to back up and replace, or choose another `-o` folder |
-| `Another export holds .logo-kit.lock` | A run is active, or a lock from another machine or a live process remains. Stale locks from exited processes on this host clear themselves |
+| `Another export holds .logo-kit.lock` | A run is active, or a lock from another machine or a live process remains. Stale locks from exited processes on this host are reclaimed automatically |
 | `The white variant needs a transparent source` | Use `--remove-background` or a brand `background` block first |
 | `Background removal removed all artwork` | The color or tolerance matches the art; lower the tolerance or pick the right color |
 | `NOT WRITTEN: ... DPI is below 150` | The master has too few pixels for that size; the message names the pixels needed. Supply a larger or vector master, or pass `--allow-low-dpi` knowingly |

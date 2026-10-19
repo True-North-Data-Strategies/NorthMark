@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 import math
 from pathlib import Path
+import re
 
 from PIL import ImageColor
 import yaml
@@ -21,6 +22,10 @@ BACKGROUND_KEYS = {"color", "mode", "tolerance", "feather"}
 WEB_KEYS = {"name", "short_name", "theme_color", "background_color"}
 DTF_KEYS = {"audience", "placements", "variants", "garments", "symbol_for", "overrides", "product"}
 UVDTF_KEYS = {"sizes", "variants"}
+# Names that become folders or file-name parts: one lowercase path component, nothing else.
+SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+RESERVED_FOLDERS = {"masters", "web", "print", "app-icons", "dtf", "mockups", "uvdtf", "gang-sheets",
+                    *VARIANTS}
 
 
 @dataclass
@@ -65,9 +70,9 @@ def resolve_color(value, colors=None):
         if value.strip().lower() == "transparent":
             return None
         if value in colors:
-            value = colors[value]
+            return resolve_color(colors[value])
         try:
-            return ImageColor.getcolor(str(value), "RGB")
+            return ImageColor.getcolor(value, "RGB")
         except ValueError as exc:
             raise ConfigError(f"Unrecognized color: {value}") from exc
     if isinstance(value, (list, tuple)) and len(value) in (3, 4) and all(isinstance(v, int) for v in value):
@@ -84,6 +89,13 @@ def _check_keys(section, allowed, where):
     _expect(isinstance(section, dict), f"{where} must be a mapping.")
     unknown = sorted(set(section) - allowed)
     _expect(not unknown, f"Unknown setting(s) in {where}: {', '.join(unknown)}. Allowed: {', '.join(sorted(allowed))}.")
+
+
+def _safe_name(value, where, reserved=()):
+    _expect(isinstance(value, str) and SAFE_NAME.match(value) and value not in reserved,
+            f"{where}: '{value}' must be one lowercase name of letters, digits, hyphens or underscores, "
+            "and not a reserved folder name.")
+    return value
 
 
 def _int_in_range(value, low, high, where):
@@ -125,7 +137,7 @@ def _maps(section, colors):
     maps = {}
     _expect(isinstance(section, dict), "maps must be a mapping of variant names to entry lists.")
     for name, entries in section.items():
-        _expect(isinstance(name, str) and name not in VARIANTS, f"Map name '{name}' clashes with a standard variant.")
+        _safe_name(name, "maps", RESERVED_FOLDERS)
         _expect(isinstance(entries, list) and entries, f"maps.{name} must be a non-empty list.")
         resolved = []
         for entry in entries:
@@ -198,7 +210,7 @@ def _uvdtf(section):
     _expect(isinstance(sizes, list), "uvdtf.sizes must be a list.")
     for entry in sizes:
         _check_keys(entry, {"name", "width_in", "height_in"}, "uvdtf.sizes")
-        _expect(isinstance(entry.get("name"), str) and entry["name"], "uvdtf.sizes entries need a name.")
+        _safe_name(entry.get("name"), "uvdtf.sizes.name")
         for side in ("width_in", "height_in"):
             value = entry.get(side)
             _expect(isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value <= 60,
@@ -242,12 +254,14 @@ def load_brand(path):
     _expect("icon_background" not in data or icon_background is not None, "icon_background must be an opaque color.")
     banner_background = resolve_color(data.get("banner_background"), colors)
     _expect("banner_background" not in data or banner_background is not None, "banner_background must be an opaque color.")
-    web = data.get("web", {}) or {}
+    web = dict(data.get("web", {}) or {})
     _check_keys(web, WEB_KEYS, "web")
     for key, value in web.items():
         _expect(isinstance(value, str) and value.strip(), f"web.{key} must be text.")
         if key.endswith("_color"):
-            resolve_color(value, colors)
+            rgb = resolve_color(value, colors)
+            _expect(rgb is not None, f"web.{key} cannot be transparent.")
+            web[key] = "#%02x%02x%02x" % rgb
     return BrandConfig(path, name.strip(), slug, sources, colors, _background(data.get("background"), colors),
                        _trim(data.get("trim")), float(padding), variants, maps, _sizes(data.get("sizes")),
                        formats, icon_background, banner_background, web, _dtf(data.get("dtf")), _uvdtf(data.get("uvdtf")))

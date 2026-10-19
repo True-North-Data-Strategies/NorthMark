@@ -6,7 +6,6 @@ placements data file or the job file, never from constants in code.
 
 from dataclasses import dataclass, field
 import csv
-import hashlib
 import json
 from pathlib import Path
 import struct
@@ -17,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import __version__
 from .config import load_yaml
 from .dtf import DPI_TARGET, load_placements
+from .files import sha256_file
 from .imaging import fit_canvas
 from .presets import slugify
 
@@ -89,8 +89,9 @@ def _orientations(width, height, policy):
     return [as_is, turned]
 
 
-def _shelves(pieces, width, gap, margin, policy):
-    """First-fit shelf packing with unbounded length. Returns [(height, [placements])]."""
+def _shelves(pieces, width, gap, margin, policy, usable_length):
+    """First-fit shelf packing with unbounded length. Returns [(height, [placements])], or None
+    when this orientation policy cannot place every piece."""
     usable = width - 2 * margin
     shelves = []
     for item, copy in pieces:
@@ -102,9 +103,10 @@ def _shelves(pieces, width, gap, margin, policy):
                     if choice is None or score < choice[0]:
                         choice = (score, index, w, h, rotated)
         if choice is None:
-            options = [o for o in _orientations(item.width_in, item.height_in, policy) if o[0] <= usable + 1e-9]
+            options = [o for o in _orientations(item.width_in, item.height_in, policy)
+                       if o[0] <= usable + 1e-9 and o[1] <= usable_length + 1e-9]
             if not options:
-                raise ValueError(f"{item.key} ({item.width_in:g} x {item.height_in:g} in) is wider than the sheet.")
+                return None
             w, h, rotated = min(options, key=lambda o: (o[1], o[0]))
             shelves.append({"height": h, "x": margin, "items": []})
             index = len(shelves) - 1
@@ -136,10 +138,14 @@ def pack(items, width, lengths, gap, margin, rotate=True):
     policies = ("fit", "landscape", "portrait") if rotate else ("none",)
     best = None
     for policy in policies:
-        shelves = _shelves(pieces, width, gap, margin, policy)
+        shelves = _shelves(pieces, width, gap, margin, policy, usable_l)
+        if shelves is None:
+            continue
         total = 2 * margin + sum(h for h, _ in shelves) + gap * (len(shelves) - 1)
         if best is None or total < best[0] - 1e-9:
             best = (total, shelves)
+    if best is None:
+        raise ValueError(f"No orientation places every item on a {width:g} x {longest:g} in sheet.")
     shelves = best[1]
     sheets, current, used = [], [], 2 * margin
     for height, placed in shelves:
@@ -222,11 +228,14 @@ def _resolve_item(raw, base, exports_root, index):
     return GangItem(key, design, path, float(width), float(height), qty, placement)
 
 
-def load_job(path, exports_root):
-    """Read a YAML or CSV job file. Items resolve against the job file's folder and the exports root."""
+def load_job(path, exports_root, data=None):
+    """Read a YAML or CSV job file. Items resolve against the job file's folder and the exports root.
+
+    Sheet defaults come from ``data`` (the vendor file the run selected) or the packaged file.
+    """
     path = Path(path).resolve()
     exports_root = Path(exports_root).resolve()
-    defaults = load_placements().get("gang_sheets", {})
+    defaults = (data if data is not None else load_placements()).get("gang_sheets", {})
     if path.suffix.lower() == ".csv":
         with path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
@@ -337,6 +346,29 @@ def render_sheet_png(sheet, path, dpi=DPI_TARGET, cache=None):
     write_png_banded(path, width, height, paint, dpi)
 
 
+def pdf_image_frame(placed, sheet_length_in, image_size):
+    """Where and how large to draw the unrotated image in PDF points so it matches the PNG sheet.
+
+    The image keeps its aspect ratio and sits centered in its box. A rotated copy turns
+    90 degrees counter-clockwise, the same direction the PNG renderer uses.
+    """
+    image_w, image_h = image_size
+    if placed.rotated:
+        scale = min(placed.width_in / image_h, placed.height_in / image_w)
+        shown_w, shown_h = image_h * scale, image_w * scale      # size of the turned image on the sheet
+    else:
+        scale = min(placed.width_in / image_w, placed.height_in / image_h)
+        shown_w, shown_h = image_w * scale, image_h * scale
+    left = placed.x_in + (placed.width_in - shown_w) / 2
+    top = placed.y_in + (placed.height_in - shown_h) / 2
+    width, height = image_w * scale * 72, image_h * scale * 72
+    if placed.rotated:
+        # After rotate(90): local x runs up the page, local y runs toward the left.
+        return {"rotate": 90, "x": (left + shown_w) * 72, "y": (sheet_length_in - top - shown_h) * 72,
+                "width": width, "height": height}
+    return {"rotate": 0, "x": left * 72, "y": (sheet_length_in - top - shown_h) * 72, "width": width, "height": height}
+
+
 def render_sheet_pdf(sheet, path, title):
     """One PDF page the size of the sheet; each transfer image is embedded once and placed per copy."""
     from reportlab.lib.utils import ImageReader
@@ -344,17 +376,18 @@ def render_sheet_pdf(sheet, path, title):
 
     page = canvas.Canvas(str(path), pagesize=(sheet.width_in * 72, sheet.length_in * 72))
     page.setTitle(title)
-    readers = {}
+    readers, sizes = {}, {}
     for placed in sheet.placements:
         reader = readers.setdefault(placed.file, ImageReader(str(placed.file)))
+        if placed.file not in sizes:
+            with Image.open(placed.file) as image:
+                sizes[placed.file] = image.size
+        frame = pdf_image_frame(placed, sheet.length_in, sizes[placed.file])
         page.saveState()
-        if placed.rotated:
-            page.translate(placed.x_in * 72, (sheet.length_in - placed.y_in) * 72)
-            page.rotate(-90)
-            page.drawImage(reader, 0, 0, placed.height_in * 72, placed.width_in * 72, mask="auto")
-        else:
-            page.drawImage(reader, placed.x_in * 72, (sheet.length_in - placed.y_in - placed.height_in) * 72,
-                           placed.width_in * 72, placed.height_in * 72, mask="auto")
+        page.translate(frame["x"], frame["y"])
+        if frame["rotate"]:
+            page.rotate(frame["rotate"])
+        page.drawImage(reader, 0, 0, frame["width"], frame["height"], mask="auto")
         page.restoreState()
     page.showPage()
     page.save()
@@ -479,6 +512,6 @@ def build_gang(job, data, work, want_pdf=True):
     for path in sorted(folder.rglob("*")):
         if path.is_file() and path.name != "layout.json":
             layout["files"].append({"path": path.relative_to(folder).as_posix(), "bytes": path.stat().st_size,
-                                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+                                    "sha256": sha256_file(path)})
     (folder / "layout.json").write_text(json.dumps(layout, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     return folder, layout, sheets, warnings

@@ -5,7 +5,6 @@ Every vendor number comes from the placements data file, never from code.
 
 from dataclasses import dataclass, field
 import csv
-import hashlib
 from importlib import resources
 import json
 import math
@@ -15,6 +14,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from . import __version__
 from .config import load_yaml, resolve_color
+from .files import sha256_file
 from .imaging import fit_canvas, make_variant, trim_to_art
 
 
@@ -86,7 +86,9 @@ class DpiVerdict:
 
 def effective_dpi(art_width, art_height, width_in, height_in):
     """Real detail per inch before any resampling, with the verdict thresholds applied."""
-    dpi = int(round(min(art_width / width_in, art_height / height_in)))
+    density = min(art_width / width_in, art_height / height_in)
+    # Floor, never round up: 149.5 real DPI must not pass as 150.
+    dpi = int(math.floor(density + 1e-9))
     level = "ok" if dpi >= DPI_TARGET else "warn" if dpi >= DPI_FAIL_BELOW else "fail"
     return DpiVerdict(dpi, level, pixels_for(width_in, height_in))
 
@@ -280,7 +282,8 @@ def build_dtf(sources, request, data, work):
     min_line_mm = industry.get("min_line_mm")
     min_px = math.ceil(min_line_mm / 25.4 * DPI_TARGET) if min_line_mm else None
     max_mb = data.get("files", {}).get("max_upload_mb")
-    variants_by_role = {role: {name: make_variant(art.image, name, request.maps) for name in request.variants}
+    every_variant = tuple(dict.fromkeys(request.variants + (request.uvdtf_variants or ())))
+    variants_by_role = {role: {name: make_variant(art.image, name, request.maps) for name in every_variant}
                         for role, art in sources.items()}
     jobs = [(request.audience, name, placement_box(data, request.audience, name, request.overrides),
              request.variants, True) for name in request.placements]
@@ -386,7 +389,7 @@ def build_dtf(sources, request, data, work):
     for path in sorted(folder.rglob("*")):
         if path.is_file() and path.name != "dtf.json":
             manifest["files"].append({"path": path.relative_to(folder).as_posix(), "bytes": path.stat().st_size,
-                                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+                                      "sha256": sha256_file(path)})
     (folder / "dtf.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     return folder, manifest, outputs
 
@@ -417,31 +420,64 @@ def press_card_lines(request, data, outputs, recommendations):
     return lines
 
 
-def write_press_card(folder, request, data, outputs, recommendations):
-    lines = press_card_lines(request, data, outputs, recommendations)
-    try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-    except ImportError:
-        path = folder / "press-card.png"
-        page = Image.new("RGB", (1275, 1650), "white")
-        draw = ImageDraw.Draw(page)
-        font = ImageFont.load_default(size=22)
-        for index, line in enumerate(lines[:60]):
-            draw.text((60, 60 + index * 26), line, fill="black", font=font)
-        page.save(path, optimize=True)
-        return path
-    path = folder / "press-card.pdf"
+def _wrap(line, width):
+    """Split a line into pieces no longer than ``width`` characters, keeping its indent."""
+    indent = len(line) - len(line.lstrip(" "))
+    words, pieces, current = line.strip().split(" "), [], ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) + indent > width:
+            pieces.append(" " * indent + current)
+            current = word
+        else:
+            current = candidate
+    pieces.append(" " * indent + current)
+    return pieces
+
+
+def render_press_card_png(lines, path, width=1275, chars=96):
+    """One tall PNG page sized to hold every line; nothing is dropped."""
+    wrapped = [piece for line in lines for piece in _wrap(line, chars)]
+    line_height = 26
+    page = Image.new("RGB", (width, 120 + line_height * len(wrapped)), "white")
+    draw = ImageDraw.Draw(page)
+    font = ImageFont.load_default(size=22)
+    for index, line in enumerate(wrapped):
+        draw.text((60, 60 + index * line_height), line, fill="black", font=font)
+    page.save(path, optimize=True)
+    return path
+
+
+def render_press_card_pdf(lines, path, title):
+    """Letter pages; long lines wrap to the page width and the text paginates."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfgen import canvas
+
     page = canvas.Canvas(str(path), pagesize=letter)
-    page.setTitle(f"Press card: {request.design}")
-    y = letter[1] - 54
+    page.setTitle(title)
+    margin, size, leading = 54, 10, 14
+    usable = letter[0] - 2 * margin
+    y = letter[1] - margin
     for line in lines:
-        if y < 54:
-            page.showPage()
-            y = letter[1] - 54
-        page.setFont("Helvetica-Bold" if line.startswith("PRESS CARD") else "Helvetica", 10)
-        page.drawString(54, y, line[:110])
-        y -= 14
+        font = "Helvetica-Bold" if line.startswith("PRESS CARD") else "Helvetica"
+        indent = (len(line) - len(line.lstrip(" "))) * 4
+        for piece in simpleSplit(line.strip() or " ", font, size, usable - indent):
+            if y < margin:
+                page.showPage()
+                y = letter[1] - margin
+            page.setFont(font, size)
+            page.drawString(margin + indent, y, piece)
+            y -= leading
     page.showPage()
     page.save()
     return path
+
+
+def write_press_card(folder, request, data, outputs, recommendations):
+    lines = press_card_lines(request, data, outputs, recommendations)
+    try:
+        import reportlab  # noqa: F401
+    except ImportError:
+        return render_press_card_png(lines, folder / "press-card.png")
+    return render_press_card_pdf(lines, folder / "press-card.pdf", f"Press card: {request.design}")

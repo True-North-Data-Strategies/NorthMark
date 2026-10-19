@@ -528,3 +528,37 @@ class LockFileTests(CliTestCase):
         result = self.run_tool(*SMALL)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.outputs / "demo").exists())
+
+
+class ReviewFindingCliTests(CliTestCase):
+    def test_overwrite_without_zip_retires_the_previous_archive(self):
+        self.success(*SMALL[:-1])
+        self.assertTrue((self.outputs / "demo.zip").is_file())
+        self.success(*SMALL, "--overwrite")
+        self.assertFalse((self.outputs / "demo.zip").exists())
+        self.assertTrue(any((self.outputs / ".backups").glob("*/demo.zip")))
+
+    def test_stale_lock_reclaim_happens_once(self):
+        from logo_sizes.cli import reclaim_stale_lock
+        self.outputs.mkdir()
+        lock = self.outputs / ".logo-kit.lock"
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait()
+        lock.write_text(f"pid: {dead.pid}\nhost: {socket.gethostname()}\n", encoding="utf-8")
+        self.assertTrue(reclaim_stale_lock(lock))
+        self.assertFalse(lock.exists())
+        self.assertFalse(reclaim_stale_lock(lock))
+
+    @unittest.skipUnless(HAS_SVG, "install .[svg] and the Cairo library for SVG checks")
+    def test_icons_do_not_upscale_a_raster_symbol_when_asked_not_to(self):
+        (self.inputs / "primary.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+                                                 '<rect width="100" height="100" fill="#f00"/></svg>')
+        Image.new("RGBA", (20, 20), (0, 0, 255, 255)).save(self.inputs / "symbol.png")
+        brand = self.root / "brand.yaml"
+        brand.write_text("brand: Mixed\nsources: {primary: input/primary.svg, symbol: input/symbol.png}\n"
+                         "sizes: {custom: ['s=64x64']}\npadding: 0\n")
+        self.success("kit", "--brand", str(brand), "--no-upscale", "--no-preview", "--no-zip", source=False)
+        with Image.open(self.outputs / "mixed" / "original" / "app-icons" / "favicon.ico") as ico:
+            ico.size = (64, 64)
+            box = ico.convert("RGBA").getchannel("A").getbbox()
+            self.assertLessEqual(box[2] - box[0], 20)

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import hashlib
 import html
 import json
 import math
@@ -14,6 +13,7 @@ import zipfile
 from PIL import Image, ImageDraw, ImageFont
 
 from . import __version__
+from .files import sha256_file
 from .imaging import fit_canvas, make_variant, svg_to_pdf
 
 
@@ -83,24 +83,29 @@ def choose_source(sources, width, height):
     return "primary"
 
 
-def write_icons(pick, folder, padding, upscale, background):
-    """``pick(width, height)`` returns the variant image to use for that canvas."""
+def write_icons(pick, folder, padding, background):
+    """``pick(width, height)`` returns (image, may_upscale) for the source chosen for that canvas."""
     folder.mkdir()
+
+    def icon(size, pad, fill=None):
+        image, upscale = pick(size, size)
+        return fit_canvas(image, (size, size), pad, upscale, fill)
+
     sizes = (16, 32, 48, 64, 128, 256)
-    icons = [fit_canvas(pick(size, size), (size, size), padding, upscale) for size in sizes]
+    icons = [icon(size, padding) for size in sizes]
     icons[-1].save(folder / "favicon.ico", format="ICO", sizes=[(s, s) for s in sizes],
                    append_images=icons[:-1])
     manifest_icons = []
     for size in (192, 512):
         name = f"icon-{size}.png"
-        fit_canvas(pick(size, size), (size, size), padding, upscale).save(folder / name, optimize=True)
+        icon(size, padding).save(folder / name, optimize=True)
         manifest_icons.append({"src": name, "sizes": f"{size}x{size}", "type": "image/png", "purpose": "any"})
         name = f"icon-maskable-{size}.png"
         # Keep the entire rectangular artwork inside the guaranteed 80% circle.
         safe_padding = max(padding, 0.5 - 0.4 / math.sqrt(2))
-        fit_canvas(pick(size, size), (size, size), safe_padding, upscale, background).save(folder / name, optimize=True)
+        icon(size, safe_padding, background).save(folder / name, optimize=True)
         manifest_icons.append({"src": name, "sizes": f"{size}x{size}", "type": "image/png", "purpose": "maskable"})
-    fit_canvas(pick(180, 180), (180, 180), padding, upscale, background).save(folder / "apple-touch-icon.png", optimize=True)
+    icon(180, padding, background).save(folder / "apple-touch-icon.png", optimize=True)
     _write_json(folder / "manifest.webmanifest", {"icons": manifest_icons})
 
 
@@ -341,9 +346,9 @@ def generate_kit(sources, slug, work, options, notes):
             background = options.icon_background or ((32, 32, 32, 255) if name == "white" else (255, 255, 255, 255))
 
             def pick(width, height, name=name):
-                return variants[choose_source(sources, width, height)][name]
-            write_icons(pick, variant_dir / "app-icons", options.padding,
-                        options.upscale or primary.vector, background)
+                role = choose_source(sources, width, height)
+                return variants[role][name], options.upscale or sources[role].vector
+            write_icons(pick, variant_dir / "app-icons", options.padding, background)
             exports.extend(p.relative_to(folder).as_posix() for p in sorted((variant_dir / "app-icons").iterdir()))
     if options.icons and "original" in options.variants:
         write_web(folder, slug, sources, options, exports, details)
@@ -360,8 +365,8 @@ def generate_kit(sources, slug, work, options, notes):
     (folder / "GUIDE.txt").write_text(GUIDE, encoding="utf-8")
     metadata = {
         "generator_version": __version__, "brand": slug, "source_name": primary.path.name,
-        "source_sha256": hashlib.sha256(primary.path.read_bytes()).hexdigest(), "vector_source": primary.vector,
-        "sources": {role: {"name": art.path.name, "sha256": hashlib.sha256(art.path.read_bytes()).hexdigest(),
+        "source_sha256": sha256_file(primary.path), "vector_source": primary.vector,
+        "sources": {role: {"name": art.path.name, "sha256": sha256_file(art.path),
                            "vector": art.vector, "background": art.background} for role, art in sources.items()},
         "variants": list(options.variants), "formats": list(options.formats), "padding": options.padding,
         "upscale_raster": options.upscale, "background": options.background, "trim": options.trim,
@@ -371,8 +376,7 @@ def generate_kit(sources, slug, work, options, notes):
     for path in sorted(folder.rglob("*")):
         if path.is_file():
             relative = path.relative_to(folder).as_posix()
-            entry = {"path": relative, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                     "bytes": path.stat().st_size}
+            entry = {"path": relative, "sha256": sha256_file(path), "bytes": path.stat().st_size}
             entry.update(details.get(relative, {}))
             metadata["files"].append(entry)
     _write_json(folder / "kit.json", metadata)
@@ -386,13 +390,15 @@ def generate_kit(sources, slug, work, options, notes):
     return KitResult(folder, archive, metadata, warnings)
 
 
-def publish(items, output_root, label, overwrite=False):
+def publish(items, output_root, label, overwrite=False, retire=()):
     """Move built items to their destinations in one step, keeping a backup of anything replaced.
 
-    ``items`` is a list of (built_path, destination) pairs. Either every item lands
-    or nothing changes: a failure part-way restores the previous state.
+    ``items`` is a list of (built_path, destination) pairs. ``retire`` lists outputs of a
+    previous run that have no replacement this time; they move to the backup too, so a
+    stale file never sits beside a fresh one. Either every item lands or nothing changes:
+    a failure part-way restores the previous state.
     """
-    destinations = [destination for _, destination in items]
+    destinations = [destination for _, destination in items] + list(retire)
     for destination in destinations:
         if destination.is_symlink():
             raise ValueError("An output is a symbolic link. Choose a different output folder.")
@@ -430,6 +436,9 @@ def publish(items, output_root, label, overwrite=False):
 def publish_kit(folder, archive, output_root, overwrite=False):
     slug = folder.name
     items = [(folder, output_root / slug)]
+    retire = []
     if archive:
         items.append((archive, output_root / f"{slug}.zip"))
-    return publish(items, output_root, slug, overwrite)
+    else:
+        retire.append(output_root / f"{slug}.zip")
+    return publish(items, output_root, slug, overwrite, retire)

@@ -1,0 +1,29 @@
+// Opens the NorthMark repository (True-North-Data-Strategies/NorthMark) as one folder.
+// Follows TNDS-PRM-VSCWS-001, the TNDS workspace standard. Committed with the code; edit by hand.
+{
+  "folders": [
+    {
+      "name": "NorthMark",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/.pytest_cache": true,
+      "**/.venv": true,
+      "**/__pycache__": true
+    },
+    "search.exclude": {
+      "**/.DS_Store": true,
+      "**/.pytest_cache": true,
+      "**/.venv": true,
+      "**/__pycache__": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python"
+    ]
+  }
+}

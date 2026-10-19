@@ -13,6 +13,7 @@ from .imaging import (SOURCE_EXTENSIONS, detect_background, load_image, opaque_c
                       trim_to_art)
 from .dtf import (DtfRequest, UVDTF, build_dtf, garment_colors, load_order, load_placements, pixels_for,
                   placement_box, placement_names)
+from .gang import build_gang, load_job, pack
 from .kit import BuildOptions, SourceArt, generate_kit, publish, publish_kit
 from .presets import GROUPS, PRESETS, VARIANTS, parse_size, slugify
 from .report import print_file_table
@@ -397,14 +398,74 @@ def run_dtf(argv):
         return 1
 
 
+def parser_for_gang():
+    parser = argparse.ArgumentParser(prog="logo-sizes gang", description="Pack transfers onto wide gang sheets and write the sheet files, layout, cut list and preview.")
+    parser.add_argument("job", type=Path, help="Job file (YAML or CSV) listing designs or files, sizes and quantities.")
+    parser.add_argument("--no-rotate", action="store_true", help="Never rotate transfers, even if the job file allows it.")
+    parser.add_argument("--no-pdf", action="store_true", help="Skip the PDF sheets.")
+    parser.add_argument("--placements-file", type=Path, help="Alternative vendor data YAML; default is the packaged file.")
+    add_common_arguments(parser)
+    return parser
+
+
+def run_gang(argv):
+    args = parser_for_gang().parse_args(argv)
+    try:
+        data = load_placements(args.placements_file)
+        root = args.output_dir.resolve()
+        job = load_job(args.job, root)
+        if args.no_rotate:
+            job.rotate = False
+        destination = root / "gang-sheets" / job.name
+        if destination.is_symlink():
+            raise ValueError("The gang-sheet output is a symbolic link. Choose a different output folder.")
+        if destination.exists() and not args.overwrite:
+            raise ValueError(f"Gang-sheet output already exists for {job.name}. Use --overwrite to back it up and replace it.")
+        sheets = pack(job.items, job.width_in, job.lengths_in, job.gap_in, job.margin_in, job.rotate)
+        copies = sum(item.qty for item in job.items)
+        print(f"{job.name}: {len(job.items)} item(s), {copies} transfer(s) -> {len(sheets)} sheet(s); "
+              f"gap {job.gap_in:g} in, margin {job.margin_in:g} in, rotation {'on' if job.rotate else 'off'}")
+        for index, sheet in enumerate(sheets, 1):
+            print(f"  sheet {index}: {sheet.width_in:g} x {sheet.length_in:g} in ({sheet.length_in / 12:g} ft), "
+                  f"{len(sheet.placements)} transfer(s), used length {sheet.used_in:g} in, utilization {sheet.utilization:.0%}")
+        if args.dry_run:
+            for index, sheet in enumerate(sheets, 1):
+                for placed in sheet.placements:
+                    print(f"PLAN: sheet {index}: {placed.key} #{placed.copy} at {placed.x_in:.2f}, {placed.y_in:.2f} in, "
+                          f"{placed.width_in:.2f} x {placed.height_in:.2f} in{' rotated' if placed.rotated else ''}")
+            print("Dry run only. Nothing was written.")
+            return 0
+        with output_lock(args.output_dir):
+            with tempfile.TemporaryDirectory(prefix=".logo-build-", dir=args.output_dir) as temporary:
+                folder, layout, _, warnings = build_gang(job, data, Path(temporary), not args.no_pdf)
+                backup = publish([(folder, destination)], root, f"gang-{job.name}", args.overwrite)
+        print(f"DONE: {job.name} -> {destination}")
+        if backup:
+            print(f"  Previous gang-sheet output kept at: {backup}")
+        print_file_table(layout["files"])
+        for warning in warnings:
+            print(f"  WARNING: {warning}")
+        if "cost_compare" in layout:
+            print(f"  COST: {layout['cost_compare']['summary']}")
+        gang = data.get("gang_sheets", {})
+        for key in ("upload_note", "spacing_note", "lengths_note"):
+            if gang.get(key):
+                print(f"  NOTE: {gang[key]}")
+        print(f"Finished: {len(sheets)} sheet(s). Vendor data checked {data.get('checked')}; confirm the gang-sheet "
+              "format and spacing with the vendor before the first upload.")
+        return 0
+    except (ValueError, OSError) as exc:
+        print(f"Cannot export: {exc}", file=sys.stderr)
+        return 1
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     command = "kit"
     if argv and argv[0] in COMMANDS:
         command = argv.pop(0)
-    if command == "kit":
-        return run_kit(argv)
     if command == "dtf":
         return run_dtf(argv)
-    print(f"The {command} command is not available in this version.", file=sys.stderr)
-    return 2
+    if command == "gang":
+        return run_gang(argv)
+    return run_kit(argv)

@@ -5,7 +5,7 @@ import tempfile
 import textwrap
 import unittest
 
-from logo_sizes.config import ConfigError, load_brand, resolve_color
+from northmark.config import ConfigError, load_brand, resolve_color
 
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "brand.example.yaml"

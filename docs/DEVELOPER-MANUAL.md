@@ -20,15 +20,15 @@ keep. Read the user manual first for what the commands do.
 
 | Module | Responsibility |
 | --- | --- |
-| `logo_sizes/cli.py` | Argument parsing for `kit`, `dtf` and `gang` (installed as `northmark` and `logo-sizes`); source planning; the output lock; all printing. Nothing else prints |
-| `logo_sizes/config.py` | Brand YAML loading with `yaml.safe_load`, key-by-key validation, color resolution, preset selection |
-| `logo_sizes/presets.py` | `Preset` dataclass and the preset list loaded from `data/platform-presets.yaml`; `parse_size`, `slugify` |
-| `logo_sizes/imaging.py` | Loading with limits, the SVG sanitizer, matting (`remove_background`, `detect_background`), `color_map`, `trim_to_art`, `make_variant`, `fit_canvas`, `svg_to_pdf` |
-| `logo_sizes/kit.py` | Kit generation into a work folder, icons, web drop-in, previews, `kit.json`, the ZIP, and `publish()` |
-| `logo_sizes/dtf.py` | Placement data access, inch and pixel geometry, DPI verdicts, alpha hardening, thin-stroke estimate, garment contrast, mockups, order sheet, press card, `build_dtf()` |
-| `logo_sizes/gang.py` | Job file loading, deterministic shelf packing, banded PNG writer, PDF sheets, layout and cut list, preview, cost compare, `build_gang()` |
-| `logo_sizes/report.py` | The file table printed at the end of every run |
-| `logo_sizes/files.py` | Streamed SHA-256 for output manifests |
+| `northmark/cli.py` | Argument parsing for `kit`, `dtf` and `gang` (installed as `northmark` and `logo-sizes`); source planning; the output lock; all printing. Nothing else prints |
+| `northmark/config.py` | Brand YAML loading with `yaml.safe_load`, key-by-key validation, color resolution, preset selection |
+| `northmark/presets.py` | `Preset` dataclass and the preset list loaded from `data/platform-presets.yaml`; `parse_size`, `slugify` |
+| `northmark/imaging.py` | Loading with limits, the SVG sanitizer, matting (`remove_background`, `detect_background`), `color_map`, `trim_to_art`, `make_variant`, `fit_canvas`, `svg_to_pdf` |
+| `northmark/kit.py` | Kit generation into a work folder, icons, web drop-in, previews, `kit.json`, the ZIP, and `publish()` |
+| `northmark/dtf.py` | Placement data access, inch and pixel geometry, DPI verdicts, alpha hardening, thin-stroke estimate, garment contrast, mockups, order sheet, press card, `build_dtf()` |
+| `northmark/gang.py` | Job file loading, deterministic shelf packing, banded PNG writer, PDF sheets, layout and cut list, preview, cost compare, `build_gang()` |
+| `northmark/report.py` | The file table printed at the end of every run |
+| `northmark/files.py` | Streamed SHA-256 for output manifests |
 | `tools/check_public_files.py` | The publishing guard run by CI and before every push |
 | `examples/` | The demo-art generator, example brand, order and job files, and CSV templates |
 
@@ -40,7 +40,7 @@ and rank filters cover matting, decontamination and the morphological checks.
 
 ## Data files
 
-Every platform or vendor number lives in a YAML file under `logo_sizes/data/` with a
+Every platform or vendor number lives in a YAML file under `northmark/data/` with a
 `source` and `checked` date, never in code. The files ship inside the wheel through
 `[tool.setuptools.package-data]` and are read with `importlib.resources`.
 
@@ -134,7 +134,7 @@ Python 3.10, 3.12 and 3.14. Actions are pinned by commit SHA with the version in
 comment; Dependabot proposes updates weekly for actions and pip ranges.
 
 To release: bump `version` in `pyproject.toml` and `__version__` in
-`logo_sizes/__init__.py`, commit, tag `vX.Y.Z` and push the tag. `release.yml` builds
+`northmark/__init__.py`, commit, tag `vX.Y.Z` and push the tag. `release.yml` builds
 the wheel and sdist, refuses any artwork or `local-assets` path inside them, uploads
 them as a workflow artifact and creates the GitHub release with generated notes.
 

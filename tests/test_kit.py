@@ -6,8 +6,8 @@ import unittest
 
 from PIL import Image
 
-from logo_sizes.kit import BuildOptions, SourceArt, generate_kit
-from logo_sizes.presets import Preset
+from northmark.kit import BuildOptions, SourceArt, generate_kit
+from northmark.presets import Preset
 
 
 class SizeReportingTests(unittest.TestCase):

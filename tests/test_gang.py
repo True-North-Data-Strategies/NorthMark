@@ -12,7 +12,7 @@ import unittest
 
 from PIL import Image
 
-from logo_sizes.gang import (CUT_LIST_COLUMNS, GangItem, cost_compare, load_job, pack, upload_warning)
+from northmark.gang import (CUT_LIST_COLUMNS, GangItem, cost_compare, load_job, pack, upload_warning)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -216,7 +216,7 @@ class ReviewFindingGangTests(unittest.TestCase):
         self.assertEqual(len(sheets[0].placements), 1)
 
     def test_pdf_frame_matches_png_rotation_and_keeps_aspect(self):
-        from logo_sizes.gang import Placed, pdf_image_frame
+        from northmark.gang import Placed, pdf_image_frame
         square = Placed("a", "a", Path("a.png"), 1, 1.0, 2.0, 4.0, 6.0, False)
         frame = pdf_image_frame(square, 20.0, (300, 300))
         self.assertEqual(frame["rotate"], 0)

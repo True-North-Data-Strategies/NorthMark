@@ -22,15 +22,15 @@ svg = ["CairoSVG>=2.8,<3"]
 print = ["reportlab>=4,<6"]
 
 [project.scripts]
-northmark = "logo_sizes.cli:main"
-logo-sizes = "logo_sizes.cli:main"
+northmark = "northmark.cli:main"
+logo-sizes = "northmark.cli:main"
 
 [project.urls]
 Repository = "https://github.com/True-North-Data-Strategies/NorthMark"
 Issues = "https://github.com/True-North-Data-Strategies/NorthMark/issues"
 
 [tool.setuptools]
-packages = ["logo_sizes"]
+packages = ["northmark"]
 
 [tool.setuptools.package-data]
-logo_sizes = ["data/*.yaml"]
+northmark = ["data/*.yaml"]

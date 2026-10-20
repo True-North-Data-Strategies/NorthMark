@@ -5,7 +5,7 @@ import unittest
 
 from PIL import Image, ImageDraw
 
-from logo_sizes.imaging import (color_map, detect_background, remove_background,
+from northmark.imaging import (color_map, detect_background, remove_background,
                                 trim_to_art)
 
 

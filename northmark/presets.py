@@ -28,7 +28,7 @@ class Preset:
 
 def load_platform_presets():
     """The raw presets document, including each entry's source and checked date."""
-    with resources.as_file(resources.files("logo_sizes") / "data" / PRESETS_FILE) as path:
+    with resources.as_file(resources.files("northmark") / "data" / PRESETS_FILE) as path:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or not isinstance(data.get("presets"), list):
         raise ValueError(f"{PRESETS_FILE} must contain a 'presets' list.")

@@ -2,7 +2,7 @@
 
 import unittest
 
-from logo_sizes.presets import PRESETS, STANDARD_PRESETS, load_platform_presets, preset_named
+from northmark.presets import PRESETS, STANDARD_PRESETS, load_platform_presets, preset_named
 
 
 class PlatformPresetTests(unittest.TestCase):

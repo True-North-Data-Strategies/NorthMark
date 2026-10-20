@@ -11,7 +11,7 @@ import unittest
 
 from PIL import Image, ImageDraw
 
-from logo_sizes.dtf import (choose_variants_for_garments, effective_dpi, fit_inches, harden_alpha,
+from northmark.dtf import (choose_variants_for_garments, effective_dpi, fit_inches, harden_alpha,
                             load_placements, placement_box, thin_strokes)
 
 
@@ -47,7 +47,7 @@ class PlacementDataTests(unittest.TestCase):
         self.assertIn("vector", gang["upload_rule"].lower())
 
     def test_template_headers_match_the_order_sheet(self):
-        from logo_sizes.dtf import ORDER_SHEET_COLUMNS
+        from northmark.dtf import ORDER_SHEET_COLUMNS
         header = (ROOT / "examples" / "templates" / "order-sheet.csv").read_text().strip().split(",")
         self.assertEqual(header, list(ORDER_SHEET_COLUMNS))
 
@@ -252,7 +252,7 @@ class VectorDtfTests(unittest.TestCase):
 
 class ReviewFindingDtfTests(unittest.TestCase):
     def test_vector_render_cap_respects_surface_and_pixel_limits(self):
-        from logo_sizes.cli import MAX_VECTOR_PIXELS, MAX_VECTOR_SIDE, cap_vector_render
+        from northmark.cli import MAX_VECTOR_PIXELS, MAX_VECTOR_SIDE, cap_vector_render
         self.assertEqual(cap_vector_render(4000, 100, 100), 4000)
         self.assertEqual(cap_vector_render(42_000, 1000, 100), MAX_VECTOR_SIDE)
         capped = cap_vector_render(42_000, 1000, 1000)
@@ -266,7 +266,7 @@ class ReviewFindingDtfTests(unittest.TestCase):
         self.assertEqual(effective_dpi(600, 600, 2, 2).level, "ok")
 
     def test_press_card_png_grows_to_hold_every_line_and_pdf_paginates(self):
-        from logo_sizes.dtf import render_press_card_pdf, render_press_card_png
+        from northmark.dtf import render_press_card_pdf, render_press_card_png
         lines = [f"line {i}: " + "x" * 160 for i in range(120)]
         with tempfile.TemporaryDirectory() as temp:
             png = Path(temp) / "card.png"

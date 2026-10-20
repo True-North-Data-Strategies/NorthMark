@@ -18,7 +18,7 @@ from .files import sha256_file
 from .imaging import fit_canvas, make_variant, trim_to_art
 
 
-DATA = resources.files("logo_sizes") / "data"
+DATA = resources.files("northmark") / "data"
 PLACEMENTS_FILE = "ninja-placements.yaml"
 ORDER_SHEET_COLUMNS = ("design", "placement", "audience", "variant", "garment_colors", "width_in", "height_in",
                        "width_px", "height_px", "source_dpi", "warnings", "file", "qty")

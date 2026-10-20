@@ -1,6 +1,6 @@
 include make_logo_sizes.py requirements.txt README.md LICENSE
 recursive-include examples *.py *.yaml *.csv
-recursive-include logo_sizes/data *.yaml
+recursive-include northmark/data *.yaml
 recursive-include tests *.py
 recursive-include tools *.py
 recursive-exclude local-assets *

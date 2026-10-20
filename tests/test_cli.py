@@ -539,7 +539,7 @@ class ReviewFindingCliTests(CliTestCase):
         self.assertTrue(any((self.outputs / ".backups").glob("*/demo.zip")))
 
     def test_stale_lock_reclaim_happens_once(self):
-        from logo_sizes.cli import reclaim_stale_lock
+        from northmark.cli import reclaim_stale_lock
         self.outputs.mkdir()
         lock = self.outputs / ".logo-kit.lock"
         dead = subprocess.Popen([sys.executable, "-c", "pass"])

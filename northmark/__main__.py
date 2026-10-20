@@ -1,4 +1,4 @@
-"""Allow python -m logo_sizes."""
+"""Allow python -m northmark."""
 
 from .cli import main
 

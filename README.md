@@ -78,7 +78,7 @@ python make_logo_sizes.py local-assets/input/demo-mark.png --variants all
 ```
 
 The example is a generic geometric mark generated locally; no brand artwork ships with
-this repository. The installed command `logo-sizes` and `python -m logo_sizes` do the
+this repository. The installed command `logo-sizes` and `python -m northmark` do the
 same thing as the wrapper script. Every v3 invocation still works unchanged; `kit` is
 its explicit name now that `dtf` and `gang` exist.
 
@@ -117,7 +117,7 @@ thinner than about 0.5 mm are estimated and flagged as industry guidance, and ea
 variant's edge color is compared with each garment color so the summary can say, for
 example, "navy shirt: use reverse". Placements, average sizes, ranges, positions,
 garment swatches, press settings and bulk tiers all live in
-[`logo_sizes/data/ninja-placements.yaml`](logo_sizes/data/ninja-placements.yaml) with
+[`northmark/data/ninja-placements.yaml`](northmark/data/ninja-placements.yaml) with
 the date they were read. Where the vendor's pages disagree, both values are recorded and
 the safer one is used. Confirm current specs before ordering.
 
@@ -162,7 +162,7 @@ summary prints this rule, with the dates the sources were read.
 ```text
 NorthMark/
   make_logo_sizes.py       command you run
-  logo_sizes/              public program code and vendor data files
+  northmark/               public program code and vendor data files
   tests/                   tests generate their own temporary artwork
   examples/                generic example generator, example configs and CSV templates
   docs/                    manuals, plus docs/images/ with the only tracked images
@@ -192,7 +192,7 @@ This checks tracked filenames, obvious credential patterns, and, when
 `local-assets/private-terms.txt` exists, rejects any tracked YAML or CSV that mentions a
 listed term without echoing the term. Review your staged changes too; it cannot
 recognize every private detail inside an arbitrary text file. The Python package
-includes only `logo_sizes` and its data files, never `local-assets`.
+includes only `northmark` and its data files, never `local-assets`.
 
 ## Color versions
 
@@ -352,7 +352,7 @@ warning (including per-preset size caps) and every note. Skip parts with `--no-i
 Use `--list` for the complete list with sources. The original fifteen sizes are the
 standard set and are written by a run with no size flags; the rectangular sizes are
 optional and selected explicitly. All of them come from
-[`logo_sizes/data/platform-presets.yaml`](logo_sizes/data/platform-presets.yaml) with a
+[`northmark/data/platform-presets.yaml`](northmark/data/platform-presets.yaml) with a
 source and the date it was read.
 
 | Group | Sizes in pixels | Default |

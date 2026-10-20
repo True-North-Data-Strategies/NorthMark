@@ -4,7 +4,7 @@ This manual covers every command, flag, file format and output of NorthMark vers
 (the project was called Create Logos All Sizes through version 3). The README is the
 short tour; this is the reference. All examples use the wrapper
 `python make_logo_sizes.py`; the installed `northmark` command, its `logo-sizes` alias
-and `python -m logo_sizes` accept exactly the same arguments.
+and `python -m northmark` accept exactly the same arguments.
 
 ## Contents
 
@@ -295,8 +295,8 @@ was refused, so scripts can check it.
 
 | File | Holds |
 | --- | --- |
-| `logo_sizes/data/ninja-placements.yaml` | Placement ranges, averages and positions for adult, youth and women's; garment swatches; press settings; bulk tiers; gang-sheet width, lengths, gap and margin; file limits; industry guidance; the dates read |
-| `logo_sizes/data/platform-presets.yaml` | Every export size with group, purpose, safe area, cap, and source |
+| `northmark/data/ninja-placements.yaml` | Placement ranges, averages and positions for adult, youth and women's; garment swatches; press settings; bulk tiers; gang-sheet width, lengths, gap and margin; file limits; industry guidance; the dates read |
+| `northmark/data/platform-presets.yaml` | Every export size with group, purpose, safe area, cap, and source |
 
 Where two vendor statements conflict, both are recorded and the safer one is used. Pass
 `--placements-file` to use an updated copy without changing the package.

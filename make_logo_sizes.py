@@ -4,7 +4,7 @@
 import sys
 
 try:
-    from logo_sizes.cli import main
+    from northmark.cli import main
 except ImportError as exc:
     sys.exit(f'Cannot start: {exc}. Install the dependencies with: pip install -r requirements.txt')
 

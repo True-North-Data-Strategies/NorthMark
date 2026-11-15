@@ -5,19 +5,280 @@
   <img src="https://raw.githubusercontent.com/Jjohnston70/Jjohnston70/main/true-north-logo-layered-v3.png" alt="True North Data Strategies" width="240" />
   <br /><br />
   <a href="#stack"><img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20Pillow-0A8EA0?style=for-the-badge" alt="Built with Python | Pillow" /></a>
-  <a href="https://github.com/True-North-Data-Strategies/NorthMark/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/NorthMark/actions/workflows/tests.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://truenorthstrategyops.com"><img src="https://img.shields.io/badge/Built%20by-TNDS-1F6FEB?style=for-the-badge" alt="Built by TNDS" /></a>
   <a href="#contact"><img src="https://img.shields.io/badge/Contact-TNDS-181717?style=for-the-badge" alt="Contact" /></a>
 </div>
 <!-- TNDS-HEADER:END -->
 
+## Quick start
+
+**Start here: [Ghostty user manual](docs/USER-MANUAL.md)** for plain-language,
+copy-and-paste steps from one image through the final delivery ZIP.
+
+
+**Already installed? Put your image in `local-assets/input`, then run these commands.**
+This macOS example assumes the project is in `~/Pictures/NorthMark`. Change the
+`cd` path if you saved it somewhere else. For a new installation, do the
+[first-time setup](#first-time-setup) first.
+
+```sh
+cd "$HOME/Pictures/NorthMark"
+source .venv/bin/activate
+python make_logo_sizes.py "local-assets/input/Your Logo.png"
+```
+
+Replace `Your Logo.png` with the exact filename, including its extension. Keep both
+quotes around the path, especially when the filename contains spaces. Do not add
+backslashes before spaces or underscores inside those quotes. If the terminal shows
+a continuation prompt instead of running, press **Ctrl+C** and paste the complete command again.
+
+The path must match the file's location: an image inside `input` needs
+`local-assets/input/` in the command. If you put it directly in `local-assets`, use
+`"local-assets/Your Logo.png"` instead. A "Source is missing or unsupported" error
+means you should check the folder, filename and supported file type.
+
+### Open the result
+
+On macOS, open the exports folder:
+
+```sh
+open "local-assets/exports"
+```
+
+Open the folder named after your image, then open `preview.html`. The matching ZIP
+beside that folder is the complete kit to share. The default keeps the original
+colors, fits the complete source inside each canvas, and adds 8% padding per side.
+Nothing is cropped or stretched.
+
+### Choose the next command
+
+Run these from the project folder with `.venv` active. Replace the example filename
+in each command. Choose the task you need; these are not steps to run in sequence.
+
+| Task | Command |
+| --- | --- |
+| Rebuild the same kit, keeping a dated backup | `python make_logo_sizes.py "local-assets/input/Your Logo.png" --overwrite` |
+| Add every standard color version to a transparent logo | `python make_logo_sizes.py "local-assets/input/Your Logo.png" --variants all --overwrite` |
+| Create a DTF transfer for the left chest | `python make_logo_sizes.py dtf "local-assets/input/Your Logo.png" --placement left-chest` |
+| List available print placements and sizes | `python make_logo_sizes.py dtf --list-placements` |
+| Process all images directly inside the input folder | `python make_logo_sizes.py` |
+
+Existing output is refused unless you add `--overwrite`. White and black color
+versions require transparent artwork; see [background removal](#background-removal)
+if your image has a solid background. DTF output goes into the design's `dtf/`
+folder and reports whether the source has enough resolution for the print size.
+See [DTF quick start](#dtf-quick-start) for print outputs and resolution checks.
+
+For the complete sequence, use the [ReelRoots walkthrough](#reelroots-walkthrough).
+For a single folder and ZIP containing all outputs, use [Bundle everything](#bundle-everything).
+
 ## Contents
 
-[What this is](#what-this-is) | [Quick start](#quick-start) | [DTF quick start](#dtf-quick-start) |
+[Quick start](#quick-start) | [ReelRoots walkthrough](#reelroots-walkthrough) | [Bundle everything](#bundle-everything) | [Troubleshooting](#troubleshooting) | [What this is](#what-this-is) | [First-time setup](#first-time-setup) | [DTF quick start](#dtf-quick-start) |
 [Gang sheets](#gang-sheets) | [Keep your artwork private](#keep-your-artwork-private) |
 [Color versions](#color-versions) | [Background removal](#background-removal) |
 [Config reference](#config-reference) | [One master does it all](#one-master-does-it-all-when-it-does-and-when-it-doesnt) |
-[SVG originals](#svg-originals) | [What is in a kit](#what-is-in-a-kit) | [Export sizes](#export-sizes) |
-[Safe reruns](#safe-reruns-and-other-folders) | [Development](#development-and-installation) | [Manuals](#manuals)
+[Artwork layouts](#horizontal-stacked-and-symbol-artwork) | [SVG originals](#svg-originals) | [What is in a kit](#what-is-in-a-kit) | [Export sizes](#export-sizes) |
+[Safe reruns](#safe-reruns-and-other-folders) | [Development](#development-and-installation) | [Developer notes](#developer-notes) | [Manuals](#manuals)
+
+## ReelRoots walkthrough
+
+Run these blocks in order from a macOS terminal. Commands that rebuild outputs are
+marked below. The source artwork stays in `local-assets`; none is included in the repository.
+
+### 1. Enter the project and build the digital kit
+
+```sh
+cd "/Users/jj-personal/Pictures/NorthMark"
+source .venv/bin/activate
+```
+
+Change the `cd` path on another computer. The remaining steps use a source named
+`ReelRoots.png` in `local-assets/input`, which produces the output folder `reelroots`.
+Use that filename consistently. If your source has a longer name, you can rename it
+in Finder before starting, or substitute its matching output folder throughout.
+
+```sh
+python make_logo_sizes.py "local-assets/input/ReelRoots.png"
+open "local-assets/exports/reelroots/preview.html"
+```
+
+If the kit already exists, add `--overwrite` to back it up and rebuild it.
+These are alternative source paths, not extra steps to run:
+
+| Source location or name | Kit command | Output folder under `local-assets/exports` |
+| --- | --- | --- |
+| Image directly in `local-assets` | `python make_logo_sizes.py "local-assets/your-image.png"` | `your-image` |
+| Original long filename inside `input` | `python make_logo_sizes.py "local-assets/input/ReelRoots_ Cinematic Family Memories.png"` | `reelroots-cinematic-family-memories` |
+
+For the long filename, its kit preview opens with:
+
+```sh
+open "local-assets/exports/reelroots-cinematic-family-memories/preview.html"
+```
+
+Do not mix this longer output path with `reelroots`. The path printed after `DONE:`
+is the actual destination. The wildcard commands below are convenient only when
+**exactly one** PNG starts with `ReelRoots` in `input`. Otherwise use the exact quoted
+source path. Leave `*` unquoted and do not put a backslash before it.
+
+### 2. Create the left-chest transfer
+
+```sh
+python make_logo_sizes.py dtf local-assets/input/ReelRoots*.png --placement left-chest
+open "local-assets/exports/reelroots/dtf"
+```
+
+If DTF output already exists, add `--overwrite`. If the source has a solid background
+that you want removed, rebuild with automatic background removal:
+
+```sh
+python make_logo_sizes.py dtf local-assets/input/ReelRoots*.png --placement left-chest --remove-background auto --overwrite
+open "local-assets/exports/reelroots/dtf/mockups"
+```
+
+Inspect the mockups to confirm the background is gone and fine details remain intact.
+Automatic removal estimates the border color; it is not a guarantee of a clean cutout.
+
+### 3. Add the full-front transfer and review both
+
+```sh
+python make_logo_sizes.py dtf local-assets/input/ReelRoots*.png --placement left-chest --placement full-front --remove-background auto --overwrite
+open "local-assets/exports/reelroots/dtf/order-sheet.csv"
+open "local-assets/exports/reelroots/dtf/mockups"
+open "local-assets/exports/reelroots/dtf/adult"
+```
+
+Omit `--remove-background auto` if you want to retain the background. Include both
+placements when rebuilding: `--overwrite` replaces the design's entire `dtf/`
+folder and keeps the previous output in a dated backup.
+
+Check the final written/refused counts, exact inches, source DPI, thin-stroke warnings
+and garment contrast. **Do not build a gang sheet until every listed transfer exists.**
+A run can print `DONE` while refusing one placement for insufficient resolution.
+
+### 4. Resolve a refused full-front transfer
+
+Skip this step if both transfers were written. The observed 11.00 x 9.97 inch
+full-front attempt had only 107 source DPI and was refused. At 300 DPI, that size
+needs at least 3300 x 2991 pixels of actual artwork after trimming. Prefer a larger
+original or a genuine vector source, then rerun step 3 with that source.
+
+For a **layout proof using the current low-resolution image**, explicitly allow it:
+
+```sh
+python make_logo_sizes.py dtf local-assets/input/ReelRoots*.png --placement left-chest --placement full-front --remove-background auto --allow-low-dpi --overwrite
+```
+
+This bypasses refusal and enlarges the image; it does not restore detail. The exported
+PNG's 300 DPI tag does not change the original's 107 DPI at that print size. A gang
+sheet or ZIP made from this output still contains that low-resolution transfer.
+
+### 5. Create the gang-sheet job file
+
+This example requests one copy of each placement. Change `qty` for the quantities
+you need and confirm the sheet dimensions with your printer. Paste the entire block,
+including the final `YAML` on its own line. This replaces an existing job file of the same name.
+
+```sh
+mkdir -p local-assets/orders
+cat > local-assets/orders/reelroots-gang.yaml <<'YAML'
+job: reelroots-gang
+
+sheet:
+  width_in: 22
+  lengths_ft: [2, 5, 10]
+  gap_in: 0.25
+  margin_in: 0.5
+  rotate: true
+
+items:
+  - design: reelroots
+    placement: left-chest
+    variant: original
+    qty: 1
+  - design: reelroots
+    placement: full-front
+    variant: original
+    qty: 1
+YAML
+```
+
+If your output folder has a different name, change both `design` values to that name.
+
+### 6. Build and inspect the gang sheet
+
+```sh
+python make_logo_sizes.py gang local-assets/orders/reelroots-gang.yaml
+open "local-assets/exports/gang-sheets/reelroots-gang"
+```
+
+Review `preview.png`, `cut-list.csv` and `layout.json`. If you change quantities or
+regenerate a transfer, rebuild the gang sheet; it does not update automatically:
+
+```sh
+python make_logo_sizes.py gang local-assets/orders/reelroots-gang.yaml --overwrite
+```
+
+The generated sheet PNG and PDF contain raster artwork. Confirm the printer's current
+accepted format before upload. For individual transfer orders, use each placement's
+PNG and the exact dimensions in `order-sheet.csv`. Package the results below.
+
+## Bundle everything
+
+The automatically generated `local-assets/exports/reelroots.zip` is the **digital kit**
+from the kit command. It is not updated when DTF files or gang sheets are generated.
+Use a separate delivery bundle to collect the current outputs.
+
+After the digital kit, DTF transfers and gang sheet have been built, run this whole
+block on macOS from the project root. It checks for the required outputs, creates a
+unique delivery folder and stops if a copy fails. The optional longer-name folder
+preserves a digital kit created before the source was renamed to `ReelRoots.png`.
+
+```sh
+(
+  set -e
+  test -f "local-assets/exports/reelroots/kit.json" || test -f "local-assets/exports/reelroots-cinematic-family-memories/kit.json"
+  test -f "local-assets/exports/reelroots/dtf/dtf.json"
+  test -f "local-assets/exports/gang-sheets/reelroots-gang/layout.json"
+  test -f "local-assets/orders/reelroots-gang.yaml"
+  mkdir -p "local-assets/dist"
+  bundle_dir=$(mktemp -d "local-assets/dist/reelroots-delivery-XXXXXX")
+  ditto "local-assets/exports/reelroots" "$bundle_dir/reelroots"
+  ditto "local-assets/exports/gang-sheets/reelroots-gang" "$bundle_dir/gang-sheet"
+  cp "local-assets/orders/reelroots-gang.yaml" "$bundle_dir/reelroots-gang.yaml"
+  if [ -d "local-assets/exports/reelroots-cinematic-family-memories" ]; then
+    ditto "local-assets/exports/reelroots-cinematic-family-memories" "$bundle_dir/digital-kit"
+  fi
+  ditto -c -k --sequesterRsrc --keepParent "$bundle_dir" "${bundle_dir}.zip"
+  unzip -tq "${bundle_dir}.zip"
+  open "local-assets/dist"
+)
+```
+
+Keep the delivery folder for browsing and share the matching ZIP. It includes kit
+assets and source masters when present, DTF files, mockups, the order sheet, gang
+sheets and the job YAML. It does not copy unrelated designs or `.backups`. Review
+these contents before sharing. Packaging does not validate print quality or detect
+stale exports. Rebuild the kit, transfers and sheet after changing the source, then
+make a new delivery bundle. The [user manual](docs/USER-MANUAL.md#8-bundle-everything)
+explains each step and what to do if a required output is missing.
+
+## Troubleshooting
+
+| Symptom | Cause and next action |
+| --- | --- |
+| `Source is missing or unsupported` | Check the exact filename, extension and whether it is inside `local-assets/input` or directly in `local-assets`. |
+| Continuation prompt after pasting a command | A quote or heredoc is unfinished. Press Ctrl+C and paste the complete block again. |
+| Literal backslashes in a filename | Inside quotes, use `_` and `.`, not `\_` or `\.`. An unquoted wildcard is `ReelRoots*.png`, not `ReelRoots\*.png`. |
+| Wildcard matches more than one image | Use a single exact quoted filename; the command accepts one source image. |
+| `open` says the output does not exist | Use the destination printed after `DONE:`. A longer source filename produces a different folder name. Also verify the export actually succeeded. |
+| `no DTF output found` for `full-front` | Check the preceding DTF output for `NOT WRITTEN`. Supply a higher-resolution source, use the explicit proof override, or remove that placement from the gang job. |
+| `DONE` followed by a resolution refusal | Some transfers may exist while others were refused. Read the final counts before proceeding. |
+| `output already exists` | Add `--overwrite` to back up and replace the existing output. |
+| Solid background remains | PNG conversion alone does not remove it. Use the background removal option and inspect the mockups. |
+| Thin strokes, poor contrast or size warnings | Review the artwork and dimensions before ordering; successful export is not print approval. |
+| PDF support is missing | Install `python -m pip install -e ".[print]"`, or append `--no-pdf` to the gang command for PNG output. |
 
 ## What this is
 
@@ -46,11 +307,14 @@ transparent backgrounds, then in circular profile crops and light and dark brows
 The empty white-on-white and black-on-dark cells are the point: they show which version
 not to use where.*
 
-## Quick start
+## First-time setup
 
-Requires Python 3.10 or newer.
+Requires Python 3.10 or newer. For a guided setup including PDF support, see the
+[user manual](docs/USER-MANUAL.md#first-time-setup). On macOS, run this once from your project folder
+(change the `cd` path if needed):
 
 ```sh
+cd "$HOME/Pictures/NorthMark"
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
@@ -60,15 +324,14 @@ mkdir -p local-assets/input
 On Windows, use `python` instead of `python3` and activate with
 `.venv\Scripts\activate`. You can create `local-assets/input` in Explorer.
 
-Put your original images in `local-assets/input`, then run:
+Put your original images in `local-assets/input`, then run one image by its exact path:
 
 ```sh
-python make_logo_sizes.py
+python make_logo_sizes.py "local-assets/input/Your Logo.png"
 ```
 
-Each image gets its own folder and ZIP under `local-assets/exports`. The default keeps
-the original colors, fits the complete source inside each canvas, and adds 8% padding
-per side. Nothing is cropped or stretched. Existing output is refused.
+Replace `Your Logo.png` with your filename. Each image gets its own folder and ZIP
+under `local-assets/exports`. See [Quick start](#quick-start) for previews and the next commands.
 
 To try the tool without your own artwork:
 
@@ -99,7 +362,7 @@ vendor's custom-size box. The PNG has exactly that many pixels at 300 DPI and ca
 | Output | Where | What it is for |
 | --- | --- | --- |
 | `dtf/<audience>/<placement>/<variant>/<design>-<placement>-<W>x<H>in.png` | per design | The file to upload, 300 DPI, hardened alpha |
-| `dtf/mockups/<placement>-<variant>-on-<garment>.png` | per design | Flat garment swatches at shirt scale; the only proof you get |
+| `dtf/mockups/<placement>-<variant>-on-<garment>.png` | per design | Local garment-color previews; confirm the result with your printer |
 | `dtf/order-sheet.csv` | per design | One row per transfer: inches, pixels, source DPI, warnings, file, qty |
 | `dtf/press-card.pdf` or `.png` | per design | Sizes, positions, variant per garment color, vendor press settings |
 | `dtf/dtf.json` | per design | Everything above as data, with checksums |
@@ -146,16 +409,16 @@ Packing is deterministic shelf packing on the configured width, with a 0.25 inch
 (the lowest published industry minimum) and a 0.5 inch edge margin (a conservative
 default; 0.25 is the published minimum) and 90 degree rotation allowed. The tool picks
 the shortest configured standard length that fits, or splits across sheets, and prints
-the utilization. Files over the 50 MB upload ceiling get a warning. Enter the vendor's
+the utilization. Files over the configured 50 MB threshold get a warning; confirm the current upload limit with the printer. Enter the vendor's
 current prices in the job file and the summary compares cost per transfer for gang
 sheets against by-size orders with the bulk tiers.
 
-Ninja Transfers accepts an uploaded gang sheet only when it is fully vector. The sheet
-PNG and PDF this tool writes are raster, so for Ninja the workflow is: upload the 300 DPI
-transfer PNGs from each design's `dtf/` folder into Ninja's online gang sheet builder and
-reproduce the layout from `layout.json`, or let Auto Build place them. The rendered sheet
-is your cut plan, and the file to send to printers that accept raster sheets. The run
-summary prints this rule, with the dates the sources were read.
+As checked on 2026-11-15, Ninja's [gang-sheet upload page](https://ninjatransfers.com/products/premium-dtf-gang-sheets)
+accepts PNG and PDF among other formats and recommends at least 300 DPI for raster
+artwork. The generated sheet PNG and PDF contain raster artwork. Check the dimensions
+shown by the uploader before ordering. You can also arrange individual transfer PNGs
+with the [online builder](https://ninjatransfers.com/products/build-your-own-gang-sheet).
+This replaces the older vector-only guidance recorded in the project.
 
 ## Keep your artwork private
 
@@ -270,7 +533,7 @@ python make_logo_sizes.py dtf --brand local-assets/brands/my-brand.yaml
 
 Paths are relative to the brand file. Every key is validated before any artwork is read,
 and unknown keys are errors. With `--brand`, the size, variant and color flags are
-refused so there is one source of truth. The user manual lists every key with its
+refused so there is one source of truth. The [command reference](docs/COMMAND-REFERENCE.md) lists every key with its
 defaults.
 
 ## One master does it all: when it does and when it doesn't
@@ -278,7 +541,7 @@ defaults.
 | Situation | Verdict |
 | --- | --- |
 | A clean transparent PNG of at least 2048 px for digital use | Yes. One master covers every kit size |
-| A vector SVG master | Yes, for everything. DTF files render at a true 300 DPI and a vector PDF is written |
+| A vector SVG master | Usually. Supported SVGs render for the target size and produce a vector PDF; render limits can still cause a DPI warning |
 | A flat-background PNG with anti-aliased edges | Yes, with `--remove-background auto` or a brand `background` block |
 | A dark-shirt version of a logo with an enclosed light fill | Yes, with a `reverse` map; the tool cannot invent one from alpha alone |
 | A chest-size version of a logo with a tagline or fine detail | Usually not. The thin-stroke check will say so; supply a `symbol` master |
@@ -383,9 +646,13 @@ python make_logo_sizes.py -i /path/to/originals -o /path/to/exports
 ```
 
 `--overwrite` backs up the previous output before publishing the new one, for kits, DTF
-folders and gang sheets alike. A kit rebuild keeps the design's existing `dtf/` folder. Failed builds never replace a previous result. Duplicate
-output names are caught before any batch writes. Dry runs check paths, names and
-options without decoding artwork. A failed source produces a nonzero exit status; other
+folders and gang sheets alike. A kit rebuild keeps the design's existing `dtf/` folder.
+Errors before publication leave the previous result intact. DTF resolution refusals
+can still publish the placements that passed; check the final counts as described in
+[Developer notes](#developer-notes). Duplicate
+output names are caught before any batch writes. Kit and DTF dry runs check paths, names and
+options without decoding artwork. Gang dry runs resolve existing transfer PNGs and
+may read their dimensions while planning the sheet. A failed source produces a nonzero exit status; other
 valid sources still finish.
 
 An output lock prevents two processes from publishing into the same folder at once. The
@@ -418,11 +685,42 @@ python make_logo_sizes.py local-assets/input/demo-mark.png --variants all --over
 cp local-assets/exports/demo-mark/preview.png docs/images/demo-preview.png
 ```
 
+## Developer notes
+
+These notes describe the current implementation and the failure cases encountered
+in the walkthrough. The [developer manual](docs/DEVELOPER-MANUAL.md) covers the full architecture.
+
+| Area | Behavior and maintenance note |
+| --- | --- |
+| Output names | `northmark/presets.py:slugify` normalizes the source filename stem. `ReelRoots.png` becomes `reelroots`; the longer filename becomes `reelroots-cinematic-family-memories`. Brand files can supply their own slug. |
+| Shell quoting | The shell expands an unquoted `*` before Python sees the path. Backslashes inside double quotes before `_` or `.` remain literal filename characters. Document exact quoted paths and reserve globs for single matches. |
+| DTF completion | `northmark/cli.py:run_dtf` publishes the generated folder before reporting each placement. A refused placement has no transfer PNG; the command returns exit status 1 when any placement is refused, even if `DONE` appeared. |
+| DTF replacement | DTF publication replaces the entire design's `dtf/` directory. Include all placements that should remain. A kit rebuild preserves an existing `dtf/` directory on disk. |
+| Resolution | Source DPI is evaluated before resampling. `--allow-low-dpi` permits export without repairing missing detail. Gang-sheet rendering cannot recover that detail. |
+| Gang dependencies | `northmark/gang.py:_resolve_item` resolves design, audience, placement and variant to an existing transfer PNG. The default audience is `adult`; a refused placement makes the gang job fail. |
+| Preflight | Kit and DTF `--dry-run` do not decode or validate artwork. Gang `--dry-run` resolves existing transfers and plans packing, so it can fail on a missing PNG. |
+| ZIP scope | `northmark/kit.py:generate_kit` creates the kit ZIP before `publish_kit` carries over existing DTF files. Later DTF and gang runs do not refresh that ZIP. Use the delivery bundle command for all outputs. |
+| Rebuild order | After changing a source, rebuild its kit and all required DTF placements, then the gang sheet, then the delivery folder and ZIP. Outputs are snapshots, not live references. |
+| Vendor data | Placement sizes, ranges and recommendations come from dated YAML in `northmark/data`. Review inconsistent average sizes and ranges rather than silently treating a warning as approval. |
+
+Useful development commands, run from the project root with `.venv` active:
+
+```sh
+python -m pip install -e ".[svg,print]"
+python -m unittest discover -s tests -v
+python tools/check_public_files.py
+git diff --check
+```
+
+These commands are separate from exporting artwork. Keep source artwork, order files,
+exports and delivery archives under the ignored `local-assets` directory.
+
 ## Manuals
 
 | Document | For |
 | --- | --- |
-| [User manual](docs/USER-MANUAL.md) | Every command, flag, file format and output, with troubleshooting |
+| [User manual](docs/USER-MANUAL.md) | Plain-language Ghostty guide: exact commands from artwork to delivery ZIP |
+| [Command reference](docs/COMMAND-REFERENCE.md) | All command options, brand files, orders and output formats |
 | [Developer manual](docs/DEVELOPER-MANUAL.md) | Module map, data files, publishing and locking, tests, releases, security notes |
 
 ## License
@@ -448,5 +746,5 @@ Jacob Johnston | True North Data Strategies LLC, SDVOSB | Colorado Springs, Colo
 
 jacob@truenorthstrategyops.com | [truenorthstrategyops.com](https://truenorthstrategyops.com) | [pipelinepunks.com](https://pipelinepunks.com)
 
-_Maintained by the TNDS README steward. Last reviewed 2026-10-19._
+_Maintained by the TNDS README steward. Last reviewed 2026-11-15._
 <!-- TNDS-FOOTER:END -->

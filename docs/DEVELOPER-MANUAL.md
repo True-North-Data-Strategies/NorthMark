@@ -1,8 +1,11 @@
 # NorthMark: Developer Manual
 
+Reviewed 2026-11-15 for NorthMark 4.0.0.
+
 How NorthMark's code is organized, what each module guarantees, how outputs are published
 safely, how to test and release, and the security rules a public image tool has to
-keep. Read the user manual first for what the commands do.
+keep. The [user manual](USER-MANUAL.md) gives the Ghostty workflow; the
+[command reference](COMMAND-REFERENCE.md) documents options and configuration.
 
 ## Contents
 
@@ -10,11 +13,13 @@ keep. Read the user manual first for what the commands do.
 2. [Data files](#data-files)
 3. [Image pipeline](#image-pipeline)
 4. [Publishing and locking](#publishing-and-locking)
-5. [Tests](#tests)
-6. [Adding things](#adding-things)
-7. [Releases and CI](#releases-and-ci)
-8. [Security notes](#security-notes)
-9. [Conventions](#conventions)
+5. [Workflow and delivery contracts](#workflow-and-delivery-contracts)
+6. [Documentation maintenance](#documentation-maintenance)
+7. [Tests](#tests)
+8. [Adding things](#adding-things)
+9. [Releases and CI](#releases-and-ci)
+10. [Security notes](#security-notes)
+11. [Conventions](#conventions)
 
 ## Module map
 
@@ -40,8 +45,9 @@ and rank filters cover matting, decontamination and the morphological checks.
 
 ## Data files
 
-Every platform or vendor number lives in a YAML file under `northmark/data/` with a
-`source` and `checked` date, never in code. The files ship inside the wheel through
+Vendor placement and platform preset data lives in a YAML file under `northmark/data/` with a
+`source` and `checked` date. Processing limits and the 300/150 DPI thresholds
+are code constants and need separate review. The files ship inside the wheel through
 `[tool.setuptools.package-data]` and are read with `importlib.resources`.
 
 | File | Consumers |
@@ -97,6 +103,48 @@ the liveness check uses `OpenProcess` with `PROCESS_QUERY_LIMITED_INFORMATION` a
 `GetExitCodeProcess`, because `os.kill(pid, 0)` terminates on that platform and an
 exited process stays openable while a handle to it is held.
 
+## Workflow and delivery contracts
+
+| Behavior | What maintainers must preserve or explain |
+| --- | --- |
+| Naming | `presets.slugify` derives an output name from the source filename stem; a brand configuration can supply an explicit slug. Changing the source filename can change the output directory. |
+| DTF partial publication | `run_dtf` publishes the successful subset before printing verdicts. `DONE` is followed by a written/refused count. Any refused transfer produces exit status 1 and no PNG for that placement. |
+| DTF reruns | The whole design's `dtf/` directory is replaced, with a backup. Callers must include every placement they want to keep. |
+| Kit carry-over | `publish_kit` carries the existing `dtf/` directory into the new kit folder. `generate_kit` created the ZIP earlier, so that ZIP does not include carried-over DTF outputs. |
+| Gang inputs | Design-based jobs require an existing PNG under `<design>/dtf/<audience>/<placement>/<variant>`. A missing or refused placement blocks the job. |
+| Quantity ownership | Gang `qty` controls copies on the sheet. DTF quantities come from its separate `--order` file; the gang command does not rewrite the DTF order sheet. |
+| Preflight | Kit and DTF dry runs do not decode artwork. Gang dry runs resolve files and may open PNGs to determine dimensions. |
+| Quality overrides | `--allow-low-dpi` bypasses refusal, not image quality limits. The DPI tag and later gang-sheet resampling do not restore source detail. |
+| Variant recommendations | The best generated variant is selected even if all variants have poor contrast. A recommendation is not a guarantee of readability. |
+| Delivery bundles | The user manual uses macOS `ditto`, checks required files, stops on errors in a subshell, creates a unique folder with `mktemp -d`, and verifies the ZIP with `unzip -tq`. This is a documented shell workflow, not a NorthMark subcommand. |
+| Rebuild order | Source changes require kit, DTF placements, gang sheet, then delivery bundle to be rebuilt. No output watches another for changes. |
+
+Vector rerendering is capped by `MAX_VECTOR_SIDE` and `MAX_VECTOR_PIXELS`. A sparse
+viewBox can therefore still produce a warning or refusal. DTF hardening preserves a
+one-pixel soft edge; nonzero semi-transparent pixels do not necessarily mean it was disabled.
+
+## Documentation maintenance
+
+| Document | Audience and content |
+| --- | --- |
+| `README.md` | Project front page, quick commands, workflow links, TNDS branding and contact information. |
+| `docs/USER-MANUAL.md` | Plain-language Ghostty walkthrough with exact commands, expected results and recovery steps. |
+| `docs/COMMAND-REFERENCE.md` | Full flag and configuration reference; uppercase placeholders are explicitly labeled. |
+| `docs/DEVELOPER-MANUAL.md` | Implementation behavior, dependencies, verification, publishing and release rules. |
+| `examples/` | Generic runnable templates; no private artwork or real client configurations. |
+
+When a CLI or output path changes, review all four documents and example comments.
+Check shell blocks with `zsh -n` without executing exports, parse YAML examples,
+verify relative links and heading anchors, and review rendered Markdown. Package
+commands can be exercised against disposable text fixtures without touching artwork.
+Run `git diff --check` and stage only the intended public files before running
+`python tools/check_public_files.py`, because that guard reads the Git index.
+
+Keep source dates specific. General vendor data retains its 2026-10-18 date; upload
+guidance was rechecked on 2026-11-15. Update the relevant `upload_checked` field when
+that policy changes instead of pretending all prices, press settings and sizes were
+reviewed. Current upload guidance is linked in the command reference and the YAML.
+
 ## Tests
 
 `python -m unittest discover -s tests -v` runs everything; CI runs the same command.
@@ -124,7 +172,7 @@ SVG tests skip when CairoSVG or the Cairo library cannot be imported.
 | A new export size | Add an entry to `data/platform-presets.yaml` with `source` and `checked`; set `standard: false` unless it must join the default run; add it to the README table |
 | A new placement or audience | Add it under `audiences` in `data/ninja-placements.yaml` with `average`, `range` where published, `position`, and a `note` for conflicts |
 | A new garment color | Add it under `garments` with a `color` and a note that the swatch is approximate |
-| A new brand-file key | Add it to `TOP_LEVEL_KEYS` or the section key sets in `config.py`, validate it, carry it on `BrandConfig`, document it in the user manual and the example file |
+| A new brand-file key | Add it to `TOP_LEVEL_KEYS` or the section key sets in `config.py`, validate it, carry it on `BrandConfig`, document it in the command reference and the example file |
 | A new CSV | Add a matching empty template under `examples/templates/` and a header test |
 
 ## Releases and CI
@@ -142,11 +190,11 @@ them as a workflow artifact and creates the GitHub release with generated notes.
 
 | Area | Rule |
 | --- | --- |
-| YAML | `yaml.safe_load` only; documents must be mappings; unknown keys are errors; names that become folders must be one safe lowercase component |
+| YAML | `yaml.safe_load` only; documents must be mappings; brand sections and gang sheet settings reject unknown keys; names that become folders must be one safe lowercase component |
 | SVG | defusedxml parsing with DTDs, entities and external references forbidden; an element allow list; no `on*` attributes, external `href`, `url()`, escapes, imports or comments in attributes or style blocks; 5 MB cap; CairoSVG with `unsafe=False` |
-| Rasters | Decompression-bomb warnings are errors; a 32 MP kit limit and a 60 MP per-transfer limit |
+| Rasters | Decompression-bomb warnings are errors; a 32 MP source limit for kit/DTF loading and a 60 MP per-transfer limit for gang inputs |
 | Paths | Outputs that are symbolic links are refused; a source inside its own output folder is refused; slugs come from `slugify` with Windows reserved names avoided |
-| Metadata | Source EXIF and comments are not carried into outputs |
+| Metadata | Derived images omit source EXIF and comments; `masters/` copies the untouched originals, including their metadata |
 | Logging | Paths are printed relative to the output root in file tables; file contents and private terms are never echoed |
 | Network | None at run time |
 | Publishing | `tools/check_public_files.py` rejects tracked artwork, private folders, credential patterns and private terms in configuration files |
@@ -157,4 +205,4 @@ them as a workflow artifact and creates the GitHub release with generated notes.
 - Every vendor or platform number is data with a source and date.
 - Every warning is a sentence that says what to do next.
 - Never delete user output; move it to `.backups/`.
-- Never mirror, never upscale silently, never set a DPI tag the pixels do not support.
+- Never mirror or upscale silently. DTF output uses a 300 DPI tag; report source DPI separately and preserve warnings when a low-resolution source is enlarged.

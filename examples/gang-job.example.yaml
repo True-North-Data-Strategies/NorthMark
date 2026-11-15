@@ -14,10 +14,11 @@ sheet:
   margin_in: 0.5                # conservative clear border; the lowest published minimum is 0.25
   rotate: true                  # allow 90 degree rotation to pack tighter
 
-# Ninja Transfers accepts an uploaded gang sheet only when it is fully vector. For Ninja,
-# upload the 300 DPI PNGs from each design's dtf/ folder into its online gang sheet builder
-# and reproduce the layout in layout.json, or use Auto Build. The sheet PNG and PDF this
-# tool writes are the cut plan, and the upload for printers that accept raster sheets.
+# NorthMark writes raster PNG/PDF sheets. Ninja's upload page accepts those formats
+# and recommends at least 300 DPI for raster art (checked 2026-11-15):
+# https://ninjatransfers.com/products/premium-dtf-gang-sheets
+# Confirm dimensions in the uploader; the online builder is another option for
+# arranging individual transfer PNGs. See docs/USER-MANUAL.md for the full workflow.
 
 items:
   - {design: example-brand, placement: full-back, variant: original, qty: 2}

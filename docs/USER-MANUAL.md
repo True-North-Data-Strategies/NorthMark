@@ -1,318 +1,420 @@
-# NorthMark: User Manual
+# NorthMark user manual: copy and paste in Ghostty
 
-This manual covers every command, flag, file format and output of NorthMark version 4
-(the project was called Create Logos All Sizes through version 3). The README is the
-short tour; this is the reference. All examples use the wrapper
-`python make_logo_sizes.py`; the installed `northmark` command, its `logo-sizes` alias
-and `python -m northmark` accept exactly the same arguments.
+Reviewed 2026-11-15 for NorthMark 4.0.0 on macOS.
 
-## Contents
+This guide takes you from one image to a folder and ZIP containing your digital logo
+kit, shirt transfers and a sheet of transfers ready for review. You do not need to
+write code. Copy one command box at a time into Ghostty, press Return and wait for
+the prompt to come back before moving on.
 
-1. [Install](#install)
-2. [Folders and privacy](#folders-and-privacy)
-3. [The kit command](#the-kit-command)
-4. [Brand configuration files](#brand-configuration-files)
-5. [The dtf command](#the-dtf-command)
-6. [Order files](#order-files)
-7. [The gang command](#the-gang-command)
-8. [Gang job files](#gang-job-files)
-9. [Reading the run summary](#reading-the-run-summary)
-10. [Vendor and platform data files](#vendor-and-platform-data-files)
-11. [Troubleshooting](#troubleshooting)
+The commands use Jacob's existing project at `/Users/jj-personal/Pictures/NorthMark`
+and the image `local-assets/input/ReelRoots.png`. That is the current short filename.
+If you are using a different computer or design, see [Use another image](#use-another-image).
+The artwork itself is private and does not come with the repository.
 
-## Install
+## Find your place
 
-| Step | Command |
+| What you want to do | Go here |
 | --- | --- |
-| Create and activate a virtual environment | `python3 -m venv .venv && source .venv/bin/activate` (Windows: `.venv\Scripts\activate`) |
-| Install the tool | `python -m pip install -r requirements.txt` or `python -m pip install -e .` |
-| Add SVG support | `python -m pip install -e ".[svg]"` plus the Cairo library (`brew install cairo` or `sudo apt-get install libcairo2`) |
-| Add PDF output (press card, gang-sheet PDF) | `python -m pip install -e ".[print]"` |
-| Everything | `python -m pip install -e ".[svg,print]"` |
+| Start a new Ghostty session | [1. Open the project](#1-open-the-project) |
+| Set up a fresh installation | [First-time setup](#first-time-setup) |
+| Make website and social-media logo files | [2. Make the digital kit](#2-make-the-digital-kit) |
+| Make a small shirt transfer | [3. Make the left-chest transfer](#3-make-the-left-chest-transfer) |
+| Add a large front-of-shirt transfer | [4. Add the full-front transfer](#4-add-the-full-front-transfer) |
+| Handle a low-resolution warning | [5. If the full-front transfer is refused](#5-if-the-full-front-transfer-is-refused) |
+| Put several transfers on one sheet | [6. Set the quantities](#6-set-the-quantities) |
+| Generate the sheet | [7. Build the gang sheet](#7-build-the-gang-sheet) |
+| Put everything in one folder and ZIP | [8. Bundle everything](#8-bundle-everything) |
+| Know which files to send | [9. Choose the files to share](#9-choose-the-files-to-share) |
+| Run the job again another day | [Rerun or change an order](#rerun-or-change-an-order) |
+| Fix an error | [Troubleshooting](#troubleshooting) |
+| Look up advanced options | [Command reference](COMMAND-REFERENCE.md) |
 
-Python 3.10 or newer is required. Pillow and PyYAML are the only required
-dependencies.
+## Before you paste
 
-## Folders and privacy
+Copy only the text inside a command box. Do not copy the terminal prompt, `❯`, the
+word `bash`, or the three backticks around a code box. If Ghostty asks whether to
+paste multiple lines, review the box and allow the paste.
 
-Everything of yours lives under `local-assets/`, which git ignores:
+Keep quotation marks exactly as shown. Do not insert backslashes before spaces,
+underscores, periods or asterisks. If you see a waiting prompt such as `dquote>` or
+`heredoc>` and nothing happens, press **Control+C**, then paste the whole box again.
+The job-file box in step 6 must include its final `YAML` line.
 
-| Folder or file | Holds |
-| --- | --- |
-| `local-assets/input/` | Original artwork. A run with no source argument processes every supported image here |
-| `local-assets/brands/<brand>.yaml` | One configuration per brand |
-| `local-assets/orders/` | Order files for quantities and gang-sheet job files |
-| `local-assets/exports/<slug>/` | The kit for one design, plus its `dtf/` folder |
-| `local-assets/exports/gang-sheets/<job>/` | Packed sheets |
-| `local-assets/exports/.backups/` | Previous outputs kept by `--overwrite` |
-| `local-assets/private-terms.txt` | One term per line; tracked YAML and CSV must not mention them |
-| `local-assets/archive/` | Anything old you want to keep |
+A **kit** is your logo in different digital sizes. A **DTF transfer** is a print file
+for a design that will be pressed onto clothing. A **gang sheet** arranges several
+transfers on one large sheet. A **mockup** is a picture showing roughly how the design
+looks on a shirt color. **DPI** describes how much image detail is available at the
+chosen print size; more pixels are needed for a bigger print.
 
-Supported source types: PNG, JPG, JPEG, WebP, BMP, TIF, TIFF, GIF (first frame) and
-SVG (with the `[svg]` extra). Sources are never modified. Run
-`python tools/check_public_files.py` before pushing to confirm nothing private is
-tracked.
+## 1. Open the project
 
-## The kit command
+Open Ghostty and paste:
 
-```sh
-python make_logo_sizes.py [kit] [SOURCE] [options]
-python make_logo_sizes.py kit --brand local-assets/brands/my-brand.yaml [options]
+```bash
+cd "/Users/jj-personal/Pictures/NorthMark"
+source .venv/bin/activate
 ```
 
-Without `SOURCE`, every image in the input folder is processed; each gets its own
-output folder named from its file name. With `--brand`, the brand file supplies the
-sources, sizes, variants and colors, and the output folder is the brand's slug.
+You should see `(.venv)` in your prompt if your prompt displays it. This turns on the
+Python setup for this project. Repeat these two commands whenever you open a new
+Ghostty tab or window. If activation fails, use [First-time setup](#first-time-setup).
 
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `-i`, `--input-dir PATH` | Folder to scan when no source is given | `local-assets/input` |
-| `-o`, `--output-dir PATH` | Where kits are published | `local-assets/exports` |
-| `--brand FILE` | Brand configuration; refuses the size, variant and color flags below | none |
-| `--group NAME` | Only presets in that group (`youtube`, `web`, `social`, `docs`, `master`, `banners`, `share`) | standard set |
-| `--preset NAME` | One preset by name; see `--list` | standard set |
-| `--size NAME=WxH` | Custom canvas; repeat for more. Replaces the standard set unless a group or preset is also chosen | none |
-| `--variants ...` | `original`, `white`, `black`, `grayscale`, `inverted`, or `all` | `original` |
-| `--formats ...` | `png` and/or `webp` (lossless) | `png` |
-| `--padding F` | Fraction of each canvas side left clear, 0 to below 0.5 | `0.08` |
-| `--no-upscale` | Never enlarge raster art beyond its source pixels | enlarge, with a note |
-| `--remove-background COLOR` | A color such as `#ffffff`, or `auto` to measure the border | off |
-| `--background-mode edge|all` | `edge` removes only regions touching the border | `edge` |
-| `--tolerance N` | Full removal within N levels of the color | `0` |
-| `--feather N` | Soft ramp over the next N levels, with color decontamination | `0` (hard cut) |
-| `--trim` | Crop to the artwork before fitting | off |
-| `--trim-threshold N` | Alpha level that counts as artwork when trimming | `8` |
-| `--icon-background COLOR` | Opaque fill behind maskable and touch icons | dark for `white`, white otherwise |
-| `--banner-background COLOR` | Opaque fill for banner and share sizes | transparent |
-| `--no-icons`, `--no-preview`, `--no-zip` | Skip those parts | all on |
-| `--overwrite` | Replace an existing kit after backing it up | refuse |
-| `--dry-run` | Print the plan without reading artwork | off |
-| `--list` | Show every preset with its group, standard or optional, and purpose | |
+Check that the image is where the following commands expect it:
 
-### What a kit contains
-
-| Path | Contents |
-| --- | --- |
-| `<variant>/<preset>.png` | One file per size and variant; `.webp` too when requested |
-| `<variant>/app-icons/` | `favicon.ico` (16 to 256), `icon-192.png`, `icon-512.png`, maskable versions, `apple-touch-icon.png`, `manifest.webmanifest` icon fragment |
-| `web/` | `favicon.ico`, icons, `apple-touch-icon.png`, complete `site.webmanifest`, `head.html`, `favicon.svg` for SVG sources, `og-image-1200.png` when that preset was made. Written when icons are on and `original` is among the variants |
-| `print/<slug>.pdf` | Vector PDF, SVG sources only |
-| `preview.png`, `preview.html` | Variants on white, dark and checkerboard, circular profile crops, light and dark tab mocks, 16, 32 and 48 px samples |
-| `preview-banners.png` | Each banner preset downscaled with its safe area outlined |
-| `masters/source.*` | The untouched primary; `masters/symbol.*` and `masters/horizontal.*` when supplied |
-| `GUIDE.txt` | Which file to use where |
-| `kit.json` | Options, sources with SHA-256, and for every file: path, bytes, SHA-256, width, height, variant, preset, purpose, source role, safe area |
-| `<slug>.zip` | The whole kit, next to the folder |
-
-### Size caps
-
-Presets may carry a `max_kb` cap. A file over its cap is still written; the summary
-and `kit.json` carry a warning. The YouTube banner carries a 6 MB cap from its source.
-
-## Brand configuration files
-
-Copy `examples/brand.example.yaml` to `local-assets/brands/<brand>.yaml`. Paths are
-relative to the brand file. Unknown keys are errors, and every value is checked before
-any artwork is read.
-
-| Key | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `brand` | text | required | Display name |
-| `slug` | text | slug of `brand` | Output folder name; lowercase letters, digits, hyphens |
-| `sources.primary` | path | required | The full logo |
-| `sources.symbol` | path | none | Used for sizes of 64 px and under and for `dtf.symbol_for` placements |
-| `sources.horizontal` | path | none | Used for canvases at least twice as wide as tall |
-| `colors.<name>` | color | none | Named colors for maps, backgrounds and web settings |
-| `background.color` | color or `auto` | none | Omit the block to keep the source alpha |
-| `background.mode` | `edge` or `all` | `edge` | |
-| `background.tolerance` | 0 to 255 | `0` | With `auto`, 0 means use the measured value |
-| `background.feather` | 0 to 255 | `0` | With `auto`, 0 means use the measured value |
-| `trim` | `true`, or `{enabled, threshold}` | off | Threshold 0 to 255, default 8 |
-| `padding` | 0 to below 0.5 | `0.08` | |
-| `variants` | list | `[original]` | Standard names or map names |
-| `maps.<name>` | list of entries | none | Name: lowercase letters, digits, hyphens, underscores; not a kit folder name. Each entry: `from` (color), `to` (color or `transparent`), `tolerance`, `feather` |
-| `sizes.groups` | list | | Standard groups plus `banners` and `share` |
-| `sizes.presets` | list | | Individual preset names |
-| `sizes.custom` | list | | `name=WIDTHxHEIGHT` strings |
-| `formats` | list | `[png]` | `png`, `webp` |
-| `icon_background` | color | by variant | Opaque |
-| `banner_background` | color | transparent | Opaque |
-| `web.name`, `web.short_name`, `web.theme_color`, `web.background_color` | text | slug | Fill `site.webmanifest` and `head.html` |
-| `dtf.audience` | `adult`, `youth`, `womens` | `adult` | |
-| `dtf.placements` | list | `left-chest, full-front, full-back` | Names from the placements file |
-| `dtf.variants` | list | brand `variants` | |
-| `dtf.garments` | list | all in the data file | Names from the placements file |
-| `dtf.symbol_for` | list | none | Placements that use the symbol source |
-| `dtf.overrides.<placement>` | `{width_in, height_in}` | vendor average | The box the art is fitted into |
-| `uvdtf.sizes` | list of `{name, width_in, height_in}` | none | Sticker sizes; names follow the same rule as map names |
-| `uvdtf.variants` | list | brand `variants` | |
-
-When no `sizes` block is present the standard fifteen presets are used.
-
-### How map variants work
-
-Each entry measures every pixel's distance from its `from` color (the largest
-difference in any RGB channel). Within `tolerance` the pixel is fully affected; over the
-next `feather` levels the effect fades to nothing. `to: transparent` multiplies the
-alpha down; a color blends toward it. All entries match against the source colors, so
-order does not matter and one entry never sees another's result.
-
-## The dtf command
-
-```sh
-python make_logo_sizes.py dtf SOURCE --placement NAME [--placement NAME ...] [options]
-python make_logo_sizes.py dtf --brand FILE [--order FILE] [options]
-python make_logo_sizes.py dtf --list-placements
+```bash
+ls -l "local-assets/input/ReelRoots.png"
 ```
 
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `--brand FILE` | Brand file with sources, maps and a `dtf` section | none |
-| `--placement NAME` | Placement to produce; repeat for more. Overrides the brand list | brand list or `left-chest`, `full-front`, `full-back` |
-| `--audience NAME` | `adult`, `youth` or `womens`. Overrides the brand setting | brand or `adult` |
-| `--variants ...` | Standard variants or map names | brand `dtf.variants`, else `original` |
-| `--garments ...` | Garment colors from the placements file | brand list, else all |
-| `--placements-file FILE` | Use another vendor data file | packaged file |
-| `--order FILE` | Order file whose quantities fill the `qty` column | none |
-| `--allow-low-dpi` | Write files that fail the 150 DPI floor; the true DPI is still reported | refuse them |
-| `--no-harden` | Keep soft alpha | threshold it |
-| `--choke N` | Erode the hardened alpha by N pixels, 0 to 10 | `0` |
-| `--remove-background`, `--background-mode`, `--tolerance`, `--feather` | As for kits; single-source runs only | off |
-| `-o`, `--overwrite`, `--dry-run` | As for kits | |
+If you see the filename and file information, continue. If you see `No such file or
+directory`, open the input folder and check the spelling:
 
-The output lands in `<output>/<design>/dtf/` and is published as one unit: an
-existing `dtf/` folder needs `--overwrite`, which backs it up first. Rebuilding the kit
-with `kit --overwrite` keeps the design's existing `dtf/` folder in place. The art is always
-trimmed to its bounding box per variant, so the stated size is the visible art.
+```bash
+open "local-assets/input"
+```
 
-### The resolution verdict
+### First-time setup
 
-| Source DPI at the printed size | Verdict | What happens |
-| --- | --- | --- |
-| 300 or more | OK | File written |
-| 150 to 299 | WARN | File written; warning names the pixels needed for 300 |
-| Below 150 | FAIL | No file unless `--allow-low-dpi`; the order-sheet row stays with the warning |
+Skip this if the project already works. From the existing project folder, this creates
+the Python setup and installs the tools, including PDF support. It needs Python 3.10
+or newer and internet access for installation. If `python3` is missing, install Python
+before continuing. There is no need to repeat this for every image.
 
-A vector SVG source renders at the needed size, so it always passes. A raster that is
-enlarged gets a note with its true source DPI. The DPI tag in the PNG is always 300; the
-pixel count is what matters, and the verdict is about pixels.
+```bash
+cd "/Users/jj-personal/Pictures/NorthMark"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[print]"
+mkdir -p local-assets/input local-assets/orders local-assets/dist
+```
 
-### Order sheet columns
+Copy your PNG into `local-assets/input` using Finder. Keep your original somewhere
+safe. Naming this working copy `ReelRoots.png` makes the commands below match exactly.
+Renaming a JPG to `.png` does not convert it; keep the real extension for other formats.
 
-`design, placement, audience, variant, garment_colors, width_in, height_in, width_px,
-height_px, source_dpi, warnings, file, qty`. The `garment_colors` column lists the
-garments for which this variant is the recommended one. An empty template is in
-`examples/templates/order-sheet.csv`.
+## 2. Make the digital kit
 
-### Press card
+This creates the logo sizes, website icons, previews and a digital-kit ZIP. It keeps
+the colors and background as they are. The `--overwrite` part makes this command safe
+to repeat: an older kit is moved into a dated backup before the new one replaces it.
 
-One page per design listing each placement with its exact size, the vendor's position
-guidance, the recommended variant per garment color and the vendor's press settings with
-the date they were read. PDF with the `[print]` extra, otherwise PNG.
+```bash
+python make_logo_sizes.py "local-assets/input/ReelRoots.png" --overwrite
+```
 
-## Order files
+When it finishes successfully, open the preview:
 
-```yaml
-order: 2026-10-18-tees
+```bash
+open "local-assets/exports/reelroots/preview.html"
+```
+
+Your browser opens a page showing the generated versions. Your folder and ZIP are in:
+
+```bash
+open "local-assets/exports"
+```
+
+If you only need website or social-media files, the digital kit is enough. You can
+share `reelroots.zip` and stop here. Continue for shirt transfers and a gang sheet.
+
+### Optional: remove the background from the digital kit
+
+Use this instead if you want the kit's background removed. It estimates the background
+color from the image edges. Check the preview afterward to make sure logo details
+were not removed with it.
+
+```bash
+python make_logo_sizes.py "local-assets/input/ReelRoots.png" --remove-background auto --overwrite
+open "local-assets/exports/reelroots/preview.html"
+```
+
+### Optional: add white, black and other color versions
+
+This replaces the kit with all standard color versions. White and black versions
+need transparent artwork, so this command includes background removal.
+
+```bash
+python make_logo_sizes.py "local-assets/input/ReelRoots.png" --remove-background auto --variants all --overwrite
+open "local-assets/exports/reelroots/preview.html"
+```
+
+These options change the digital kit only. The shirt-transfer commands below choose
+their own colors and background handling.
+
+## 3. Make the left-chest transfer
+
+This makes a small shirt transfer with the background removed. If your source is
+already transparent, automatic removal leaves an already clear border alone.
+
+```bash
+python make_logo_sizes.py dtf "local-assets/input/ReelRoots.png" --placement left-chest --remove-background auto --overwrite
+```
+
+To keep the original background instead, leave out `--remove-background auto`.
+Open the pictures showing the result on different shirt colors:
+
+```bash
+open "local-assets/exports/reelroots/dtf/mockups"
+```
+
+Check the edges, text and small details. The pictures show approximate colors and
+placement, not a finished printed shirt. Read any warnings in Ghostty.
+
+The current placement setting fits the design inside 3.5 x 2 inches. Because the
+image keeps its proportions, the actual size may be smaller. The source placement
+guide also lists a height range starting at 2.5 inches, so a size warning can appear
+with the default setting. Use the actual dimensions in the order sheet and confirm
+the size you want; the warning does not mean the program stretched the artwork.
+
+## 4. Add the full-front transfer
+
+This makes both the small chest transfer and the large front transfer together:
+
+```bash
+python make_logo_sizes.py dtf "local-assets/input/ReelRoots.png" --placement left-chest --placement full-front --remove-background auto --overwrite
+```
+
+Include every placement you want to keep. Each DTF rebuild replaces the whole `dtf`
+folder and backs up the old folder. It does not add one new placement to the old set.
+
+Read the final line. For this command, you want **2 transfer files written and 0
+refused**. If a transfer says `NOT WRITTEN`, go to step 5 before building the sheet.
+The word `DONE` alone does not mean every requested file was created.
+
+Open the order sheet and mockups:
+
+```bash
+open "local-assets/exports/reelroots/dtf/order-sheet.csv"
+open "local-assets/exports/reelroots/dtf/mockups"
+open "local-assets/exports/reelroots/dtf/adult"
+```
+
+The order sheet opens in your default spreadsheet app. Look for `width_in`,
+`height_in`, `source_dpi`, `warnings` and `file`. A blank `file` means that transfer
+was refused. In the `adult` folder, each placement has an `original` folder containing
+its transfer PNG. Use those PNGs for printing, not the small mockup pictures.
+
+A warning about low contrast means the logo may be hard to see on that shirt color.
+If `original` is the only version, it may still be listed as the recommendation;
+that does not make poor contrast acceptable.
+
+## 5. If the full-front transfer is refused
+
+Skip this section if both transfers were written. The ReelRoots run we reviewed had
+107 source DPI at 11.00 x 9.97 inches. NorthMark refuses files below 150 source DPI
+unless you explicitly allow them. For 300 DPI at that size, you need at least
+3300 x 2991 pixels of actual artwork after the background is trimmed.
+
+For printing, get a larger original or a genuine vector original. Making the same
+small PNG bigger does not bring back missing detail. After replacing the working
+source with a better image, repeat steps 2 through 4.
+
+If you only want to finish a **layout proof with the current image**, paste this:
+
+```bash
+python make_logo_sizes.py dtf "local-assets/input/ReelRoots.png" --placement left-chest --placement full-front --remove-background auto --allow-low-dpi --overwrite
+```
+
+This permits the low-resolution file. It does not improve it. The transfer, gang
+sheet and delivery ZIP will still contain the enlarged low-detail artwork. Keep that
+limitation with the proof when sharing it, and replace the source before treating it
+as a final print file.
+
+## 6. Set the quantities
+
+A short job file tells NorthMark which transfers to arrange on the sheet. This example
+uses one left-chest and one full-front transfer. Change each `qty: 1` to the number
+you want before pasting, or use it as written for one of each.
+
+Paste the entire box. The spaces at the start of the lines matter. This writes over
+an existing `reelroots-gang.yaml` job file, so keep a copy first if it has custom settings.
+
+```bash
+mkdir -p local-assets/orders
+cat > local-assets/orders/reelroots-gang.yaml <<'YAML'
+job: reelroots-gang
+
+sheet:
+  width_in: 22
+  lengths_ft: [2, 5, 10]
+  gap_in: 0.25
+  margin_in: 0.5
+  rotate: true
+
 items:
-  - {design: my-brand, placement: full-back, variant: original, qty: 2}
-  - {design: my-brand, placement: left-chest, variant: reverse, audience: youth, qty: 4}
+  - design: reelroots
+    placement: left-chest
+    variant: original
+    qty: 1
+  - design: reelroots
+    placement: full-front
+    variant: original
+    qty: 1
+YAML
 ```
 
-`design` is the brand slug or source file stem. `variant` defaults to `original`;
-`audience` defaults to the run's audience. Quantities for the same key add up. See
-`examples/order.example.yaml`.
+This uses a 22-inch-wide sheet and lets the program choose from lengths of 2, 5 or
+10 feet. There is a quarter-inch gap between transfers and half an inch around the
+outside. Confirm those dimensions with your printer. The quantities here control the
+gang sheet; they do not update the separate DTF `order-sheet.csv`.
 
-## The gang command
+If you only made a left-chest transfer, remove the entire four-line `full-front`
+entry before pasting. Every transfer listed in the job file must already exist.
 
-```sh
-python make_logo_sizes.py gang JOB [--no-rotate] [--no-pdf] [--placements-file FILE] [-o DIR] [--overwrite] [--dry-run]
+## 7. Build the gang sheet
+
+```bash
+python make_logo_sizes.py gang "local-assets/orders/reelroots-gang.yaml" --overwrite
 ```
 
-The output lands in `<output>/gang-sheets/<job>/`. Items that name a design and
-placement are looked up under `<output>/<design>/dtf/<audience>/<placement>/<variant>/`,
-so run `dtf` first. `--dry-run` packs and prints every position without writing.
+When it succeeds, open the results:
 
-| Output | Contents |
+```bash
+open "local-assets/exports/gang-sheets/reelroots-gang/preview.png"
+open "local-assets/exports/gang-sheets/reelroots-gang"
+```
+
+Check that the preview contains the right designs and number of copies. The sheet
+may split into more than one file if the copies do not fit on the chosen lengths.
+
+| File | What it is for |
 | --- | --- |
-| `sheet-<W>x<L>.png` (`-1`, `-2` suffixes when split) | 300 DPI sheet with a 300 DPI tag, transparent background |
-| `sheet-<W>x<L>.pdf` | Same layout; each image embedded once; needs `[print]` |
-| `layout.json` | Sheets with lengths, used length, utilization and every item position in inches; warnings; cost compare when prices are given |
-| `cut-list.csv` | `sheet, item, design, file, copy, width_in, height_in, x_in, y_in, rotated` |
-| `preview.png` | Sheets side by side with labeled boxes |
+| `preview.png` | A small picture for checking the arrangement. Do not upload it as the print file. |
+| `sheet-22x...png` | The full-size sheet for printing; its name includes the sheet dimensions. |
+| `sheet-22x...pdf` | The same layout as a PDF when PDF support is installed. It still contains raster artwork. |
+| `cut-list.csv` | A spreadsheet listing each copy, size and position. |
+| `layout.json` | Layout details for software. You do not need to edit this. |
 
-Packing is first-fit shelf packing. Pieces are sorted largest first, three rotation
-policies are tried and the shortest result is kept, so the same job always gives the
-same layout. The shortest configured length that holds the layout is chosen; when even
-the longest will not, the layout is split across sheets.
+If you see `no DTF output found`, a listed transfer is missing. Go back to the DTF
+summary and handle its refusal; running the gang command repeatedly will not create
+that missing transfer. If PDF support is missing, repeat the install command from
+first-time setup, or add `--no-pdf` to the gang command to make PNG output only.
 
-Defaults rest on published guidance, recorded with sources and dates in the vendor data
-file: a 0.25 inch gap between transfers (the lowest published industry minimum; widen it
-for contour cuts, scissors or large graphics) and a 0.5 inch edge margin (this tool's
-conservative default; the lowest published minimum is 0.25 inch).
+## 8. Bundle everything
 
-### Uploading to Ninja Transfers
+Use this after the kit, transfers and gang sheet are complete. The automatic
+`reelroots.zip` is only the digital kit. It does not collect later print exports.
 
-Ninja accepts an uploaded gang sheet only when it is fully vector, and prefers SVG. The
-sheet PNG and PDF written here are raster. For Ninja, upload the 300 DPI transparent PNGs
-from each design's `dtf/` folder into the online gang sheet builder and reproduce the
-positions in `layout.json`, or use Auto Build. Keep `cut-list.csv` and `preview.png` as
-the cut plan. Printers that accept raster gang sheets can take the PNG or PDF directly.
+The box below creates a new delivery folder, copies the current outputs into it,
+creates a matching ZIP and checks that the ZIP can be read. It stops if a required
+file or copy is missing. Copy the whole box, including both parentheses.
 
-## Gang job files
-
-YAML:
-
-```yaml
-job: 2026-10-18-gang
-sheet: {width_in: 22, lengths_ft: [2, 5, 10, 15, 20], gap_in: 0.25, margin_in: 0.25, rotate: true}
-items:
-  - {design: my-brand, placement: full-back, variant: original, qty: 2}
-  - {file: ../input/sticker.png, width_in: 4, height_in: 6, qty: 1}
-prices:
-  currency: USD
-  gang_sheet_by_length_ft: {2: 0.00, 5: 0.00}
-  by_size: {full-back: 0.00}
+```bash
+(
+  set -e
+  test -f "local-assets/exports/reelroots/kit.json"
+  test -f "local-assets/exports/reelroots/dtf/dtf.json"
+  test -f "local-assets/exports/gang-sheets/reelroots-gang/layout.json"
+  test -f "local-assets/orders/reelroots-gang.yaml"
+  mkdir -p "local-assets/dist"
+  bundle_dir=$(mktemp -d "local-assets/dist/reelroots-delivery-XXXXXX")
+  ditto "local-assets/exports/reelroots" "$bundle_dir/reelroots"
+  ditto "local-assets/exports/gang-sheets/reelroots-gang" "$bundle_dir/gang-sheet"
+  cp "local-assets/orders/reelroots-gang.yaml" "$bundle_dir/reelroots-gang.yaml"
+  ditto -c -k --sequesterRsrc --keepParent "$bundle_dir" "${bundle_dir}.zip"
+  unzip -tq "${bundle_dir}.zip"
+  open "local-assets/dist"
+)
 ```
 
-CSV with the header `design,placement,variant,file,width_in,height_in,qty` (template in
-`examples/templates/gang-job.csv`). Sheet settings and lengths default to the vendor data
-file. `lengths_in` may replace `lengths_ft`. An item with `file` and no size takes its
-size from the PNG's pixels and DPI tag. Prices are optional and never built in; when
-present, the summary compares cost per transfer for gang sheets against by-size orders
-using the vendor's bulk tiers.
+Finder opens `local-assets/dist`. The new delivery folder and its ZIP have the same
+name with a short unique ending. The check should report no errors in the ZIP.
 
-## Reading the run summary
+The folder contains the digital kit, its original source master, the current DTF
+files and mockups, the gang sheet and the job file. It does not include unrelated
+brands or old backups. Review the contents before sharing. Packaging does not check
+print quality or make an old gang sheet current; review the outputs first.
 
-Every run prints, per design: `DONE` with the output path, each file with its size in
-KB and a total, every `WARNING`, and every `NOTE`. DTF runs add one line per transfer
-with the exact inches, pixels, source DPI and verdict, then the recommended variant per
-garment. Gang runs add one line per sheet with its length and utilization. The final
-`Finished:` line gives counts, and the exit status is nonzero when anything failed or
-was refused, so scripts can check it.
+If nothing opens and the command stops, complete the missing earlier step. If your
+digital kit is still in the old `reelroots-cinematic-family-memories` folder, run
+step 2 with `ReelRoots.png` so the kit and transfers use the same folder.
 
-## Vendor and platform data files
+## 9. Choose the files to share
 
-| File | Holds |
+| Recipient or purpose | Files to use |
 | --- | --- |
-| `northmark/data/ninja-placements.yaml` | Placement ranges, averages and positions for adult, youth and women's; garment swatches; press settings; bulk tiers; gang-sheet width, lengths, gap and margin; file limits; industry guidance; the dates read |
-| `northmark/data/platform-presets.yaml` | Every export size with group, purpose, safe area, cap, and source |
+| Someone who needs all the project outputs | The new delivery ZIP from `local-assets/dist`. It includes source artwork. |
+| Someone who only needs digital logo files | The kit ZIP in `local-assets/exports`, or the specific files inside the kit. |
+| A printer making individual transfers | The PNG inside each placement's `original` folder, with the exact dimensions from `order-sheet.csv`. |
+| A printer making a gang sheet | The full-size `sheet-...png` or PDF, in the format the printer accepts. |
+| Someone reviewing the layout | The mockups and gang-sheet preview, clearly described as previews. |
 
-Where two vendor statements conflict, both are recorded and the safer one is used. Pass
-`--placements-file` to use an updated copy without changing the package.
+As checked on 2026-11-15, Ninja's upload page lists PNG and PDF among accepted
+formats and recommends at least 300 DPI for raster artwork. Check the current
+[gang-sheet upload requirements](https://ninjatransfers.com/products/premium-dtf-gang-sheets)
+and confirm the dimensions shown after upload. The [online builder](https://ninjatransfers.com/products/build-your-own-gang-sheet)
+is another option for arranging individual transfer images.
+
+Before ordering, confirm the artwork, dimensions, quantities, background, shirt-color
+contrast and resolution. Use the printer's current pressing instructions. Creating
+these files does not place an order or send anything to a printer.
+
+## Rerun or change an order
+
+Open the project and activate it again as shown in step 1. Then use the relevant step:
+
+| What changed | What to run again |
+| --- | --- |
+| Source image or background | Digital kit, all required DTF placements, gang sheet, delivery bundle. |
+| Print placements or print artwork | All required DTF placements, gang sheet, delivery bundle. |
+| Number of copies | Edit the job file, rebuild the gang sheet, make a new delivery bundle. |
+| Only the delivery package is missing | Run step 8 after checking the existing outputs. |
+
+`--overwrite` keeps previous generated outputs under `local-assets/exports/.backups`.
+The job-file creation box overwrites that YAML file directly; it does not make a backup.
+Each delivery bundle gets its own new folder. Existing delivery ZIPs never update
+automatically when you rebuild the images.
+
+When you are done, you may close Ghostty or turn off the project's Python setup:
+
+```bash
+deactivate
+```
+
+## Use another image
+
+For another job, put the image in `local-assets/input` and use its exact filename.
+Replace `ReelRoots.png` in the commands and replace `reelroots` in output paths and
+both `design` entries in the gang job. Give the gang job and delivery folder their
+own names too. Never rename a new brand to `ReelRoots.png` just to reuse the commands,
+because that would replace the ReelRoots outputs when `--overwrite` is used.
+
+| Source filename | Output folder name |
+| --- | --- |
+| `ReelRoots.png` | `reelroots` |
+| `ReelRoots_ Cinematic Family Memories.png` | `reelroots-cinematic-family-memories` |
+| `My Logo.png` | `my-logo` |
+
+For a filename with spaces, keep the full path inside quotes:
+
+```bash
+python make_logo_sizes.py "local-assets/input/ReelRoots_ Cinematic Family Memories.png" --overwrite
+```
+
+If the source is directly in `local-assets`, omit `input/` from its path. The output
+path after `DONE:` is the one to open. An unquoted `ReelRoots*.png` shortcut only works
+when exactly one matching image exists, so this guide uses exact filenames instead.
 
 ## Troubleshooting
 
-| Message | Cause and fix |
+| What you see | What to do |
 | --- | --- |
-| `Output already exists` | Add `--overwrite` to back up and replace, or choose another `-o` folder |
-| `Another export holds .logo-kit.lock` | A run is active, or a lock from another machine or a live process remains. Stale locks from exited processes on this host are reclaimed automatically |
-| `The white variant needs a transparent source` | Use `--remove-background` or a brand `background` block first |
-| `Background removal removed all artwork` | The color or tolerance matches the art; lower the tolerance or pick the right color |
-| `NOT WRITTEN: ... DPI is below 150` | The master has too few pixels for that size; the message names the pixels needed. Supply a larger or vector master, or pass `--allow-low-dpi` knowingly |
-| `Low contrast against the navy garment` | Use the recommended variant for that garment color |
-| `About x% of the art is thinner than 0.5 mm` | Fine detail may not print at this size; use a `symbol` master or a version without the tagline |
-| `Unsupported SVG element` or `SVG external resources` | Export a plain SVG with inline attributes; style blocks may only hold plain rules |
-| `Tracked configuration mentions a private term` | A tracked YAML or CSV contains a term from `local-assets/private-terms.txt`; move the data to `local-assets/` |
-| `PDF sheets skipped` | Install the print extra: `pip install ".[print]"` |
-| Ninja rejects the uploaded sheet | Ninja takes only vector gang sheets; upload the transfer PNGs into its gang sheet builder instead |
+| `source: no such file or directory: .venv/bin/activate` | Run the first-time setup from the project folder. |
+| `python: command not found` | Activate the project as in step 1; use first-time setup if `.venv` is missing. |
+| `can't open file ... make_logo_sizes.py` | Run the `cd` command from step 1. You are in the wrong folder. |
+| `Source is missing or unsupported` | Check the exact name, extension and folder. Do not put a backslash before `_` inside quotes. |
+| `dquote>` or `heredoc>` waiting prompt | Press Control+C and paste the whole command box, including the closing quote or final `YAML`. |
+| `open` says the folder does not exist | Check whether the export succeeded and use its printed destination. `reelroots` and the longer filename produce different folders. |
+| `Output already exists` | Add `--overwrite` to back up the old generated output and rebuild it. |
+| `NOT WRITTEN` | That transfer was not made. Follow step 5 before building a sheet that needs it. |
+| `no DTF output found` | Generate the missing placement, fix its resolution, or remove its entry from the gang job. |
+| A background or halo remains | Review the automatic cutout. It may need different background settings or a cleaner original; see the command reference. |
+| White or black versions are refused | Those versions need transparency. Remove the background first or use the original colors. |
+| Low contrast despite a recommendation to use `original` | The program can only choose among versions you generated. Review the mockup and use suitable artwork or a different shirt color. |
+| Very thin details are flagged | Simplify the design or make it larger if the source has enough detail. Ask the printer whether those details will hold. |
+| Bundle box stops without opening Finder | Check that steps 2, 4 and 7 completed and the job file exists. The bundle checks intentionally stop before copying an incomplete set. |
+| `Another export holds .logo-kit.lock` | Let the other export finish. Do not delete a lock while an export is still running. |
+
+For detailed sizes, background settings, SVG originals, brand files and other options,
+use the [command reference](COMMAND-REFERENCE.md). For maintaining NorthMark itself,
+use the [developer manual](DEVELOPER-MANUAL.md).

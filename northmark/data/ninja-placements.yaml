@@ -18,7 +18,7 @@ files:
   preferred_type: SVG
   raster_dpi: 300
   mirror: false                      # Ninja prints in the right orientation; never mirror the art
-  proofs: "No proofs or mockups are provided on DTF orders; this tool's mockup is the only proof."
+  proofs: "NorthMark mockups are local previews. Confirm available proofs and approval requirements with the printer before ordering."
   color_matching: "Hex color matching is available through the Notes to Designers box."
   max_upload_mb: 50
   max_upload_note: "The upload widget states 50 MB; the by-size how-to says files up to 5 GB. Conflicting; 50 MB is treated as the ceiling and larger files get a warning."
@@ -104,13 +104,13 @@ bulk_discounts:                    # by-size orders, whole-order quantity
 gang_sheets:
   width_in: 22
   lengths_ft: [2, 5, 10, 15, 20]
-  lengths_note: "The FAQ lists 2, 5, 10, 15 and 20 ft. Trade press reported 40 ft sheets in July 2026 and a reseller lists 7 ft; confirm on the product page before relying on either."
-  upload_types: [PNG, SVG, PDF, EPS]
+  lengths_note: "Default packing lengths remain the configured 2, 5, 10, 15 and 20 ft subset. The upload page also lists 1, 7 and 30 ft (checked 2026-11-15); confirm available sizes before ordering or changing sheet.lengths_ft."
+  upload_types: [PNG, JPG, SVG, PDF, AI, EPS, TIFF, WEBP, HEIC, AVIF, PSD, GIF, BMP]
   preferred_type: SVG
-  upload_rule: "Ninja accepts an uploaded gang sheet only when it is fully vector: 'We only accept ready to print vectorized gang sheets' and 'We prefer vector images (SVG) when uploading DTF Gang Sheets' (FAQ, read 2026-10-19). Designs that are not vector go through Ninja's online gang sheet builder, which places uploaded designs and spaces them itself (Auto Build; Impressions, 2025-07-10)."
-  upload_workflow: "For Ninja, upload the 300 DPI transparent PNGs from each design's dtf/ folder into the online gang sheet builder and reproduce this layout, or use Auto Build. The sheet PNG and PDF written here are raster, so Ninja will not take them as an uploaded gang sheet; use them as the cut plan, or for printers that accept raster sheets."
-  upload_sources: ["https://ninjatransfers.com/a/faq", "https://impressionsmagazine.com/news/ninja-transfers-online-dtf-gang-sheet-tool/166385/"]
-  upload_checked: 2026-10-19
+  upload_rule: "Ninja's gang-sheet upload page accepts raster formats including PNG and PDF; vector artwork is recommended and raster artwork should be at least 300 DPI (checked 2026-11-15). This supersedes the earlier vector-only guidance."
+  upload_workflow: "Upload the full-size sheet PNG or PDF and confirm the dimensions shown by the uploader. Alternatively, arrange individual transfer PNGs with the online gang sheet builder. Preview images are not print files; upscaling does not restore missing detail."
+  upload_sources: ["https://ninjatransfers.com/products/premium-dtf-gang-sheets", "https://ninjatransfers.com/products/build-your-own-gang-sheet"]
+  upload_checked: 2026-11-15
   pricing_note: "Price depends only on sheet size, not on how many designs are on it."
   gap_in: 0.25                     # lowest published industry minimum; not a Ninja figure
   margin_in: 0.5                   # this tool's conservative default; the lowest published minimum is 0.25 in

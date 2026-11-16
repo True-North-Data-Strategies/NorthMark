@@ -5,7 +5,7 @@
   <img src="https://raw.githubusercontent.com/Jjohnston70/Jjohnston70/main/true-north-logo-layered-v3.png" alt="True North Data Strategies" width="240" />
   <br /><br />
   <a href="#stack"><img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20Pillow-0A8EA0?style=for-the-badge" alt="Built with Python | Pillow" /></a>
-  <a href="https://truenorthstrategyops.com"><img src="https://img.shields.io/badge/Built%20by-TNDS-1F6FEB?style=for-the-badge" alt="Built by TNDS" /></a>
+  <a href="https://github.com/True-North-Data-Strategies/NorthMark/actions/workflows/tests.yml"><img src="https://github.com/True-North-Data-Strategies/NorthMark/actions/workflows/tests.yml/badge.svg" alt="CI status" /></a>
   <a href="#contact"><img src="https://img.shields.io/badge/Contact-TNDS-181717?style=for-the-badge" alt="Contact" /></a>
 </div>
 <!-- TNDS-HEADER:END -->
